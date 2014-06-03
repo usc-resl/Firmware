@@ -44,6 +44,9 @@
 
 /* Extended Kalman Filter covariances */
 
+/* whether to use magnetic sensor in EKF */
+PARAM_DEFINE_INT32(EKF_ATT_MAG_USE, 0);
+
 /* gyro process noise */
 PARAM_DEFINE_FLOAT(EKF_ATT_V3_Q0, 1e-4f);
 PARAM_DEFINE_FLOAT(EKF_ATT_V3_Q1, 0.08f);
@@ -93,6 +96,8 @@ int parameters_init(struct attitude_estimator_ekf_param_handles *h)
 
 	h->acc_comp   =	param_find("ATT_ACC_COMP");
 
+	h->mag_use = param_find("EKF_ATT_MAG_USE");
+
 	return OK;
 }
 
@@ -117,6 +122,8 @@ int parameters_update(const struct attitude_estimator_ekf_param_handles *h, stru
 	p->mag_decl *= M_PI / 180.0f;
 
 	param_get(h->acc_comp, &(p->acc_comp));
+
+	param_get(h->mag_use, &(p->mag_use));
 
 	return OK;
 }

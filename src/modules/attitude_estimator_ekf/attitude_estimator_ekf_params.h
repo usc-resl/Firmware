@@ -49,6 +49,7 @@ struct attitude_estimator_ekf_params {
 	float yaw_off;
 	float mag_decl;
 	int acc_comp;
+	bool mag_use; //!< whether to use magnetic data in EKF
 };
 
 struct attitude_estimator_ekf_param_handles {
@@ -57,6 +58,7 @@ struct attitude_estimator_ekf_param_handles {
 	param_t roll_off, pitch_off, yaw_off;
 	param_t mag_decl;
 	param_t acc_comp;
+	param_t mag_use;
 };
 
 /**

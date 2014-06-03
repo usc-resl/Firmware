@@ -437,7 +437,7 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
 					z_k[5] = raw.accelerometer_m_s2[2] - acc(2);
 
 					/* update magnetometer measurements */
-					if (sensor_last_timestamp[2] != raw.magnetometer_timestamp) {
+					if (sensor_last_timestamp[2] != raw.magnetometer_timestamp && ekf_params.mag_use) {
 						update_vect[2] = 1;
 						// sensor_update_hz[2] = 1e6f / (raw.timestamp - sensor_last_timestamp[2]);
 						sensor_last_timestamp[2] = raw.magnetometer_timestamp;
