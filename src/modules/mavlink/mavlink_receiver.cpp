@@ -65,6 +65,7 @@
 #include <poll.h>
 
 #include <mathlib/mathlib.h>
+#include <conversion/rotation.h>
 
 #include <systemlib/param/param.h>
 #include <systemlib/systemlib.h>
@@ -327,9 +328,19 @@ MavlinkReceiver::handle_message_vicon_position_estimate(mavlink_message_t *msg)
 	vicon_position.x = pos.x;
 	vicon_position.y = pos.y;
 	vicon_position.z = pos.z;
-	vicon_position.roll = pos.roll;
-	vicon_position.pitch = pos.pitch;
-	vicon_position.yaw = pos.yaw;
+
+  // vicon data is z down, pixhawk expects z up.
+  // rotate 180 degrees around X-axis (roll).
+  math::Matrix<3, 3> vicon_r;
+  vicon_r.from_euler (pos.roll, pos.pitch, pos.yaw);
+  math::Matrix<3, 3> r;
+  get_rot_matrix (ROTATION_ROLL_180, &r);
+  vicon_r = vicon_r * r;
+  math::Vector<3> euler = vicon_r.to_euler ();
+
+	vicon_position.roll = euler (0) - 180;
+	vicon_position.pitch = euler (1);
+	vicon_position.yaw = euler (2);
 
 	if (_vicon_position_pub < 0) {
 		_vicon_position_pub = orb_advertise(ORB_ID(vehicle_vicon_position), &vicon_position);
