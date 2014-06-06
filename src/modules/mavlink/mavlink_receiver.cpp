@@ -123,6 +123,14 @@ MavlinkReceiver::~MavlinkReceiver()
 {
 }
 
+void MavlinkReceiver::poll_control_mode() {
+	bool updated;
+	orb_check(_control_mode_sub, &updated);
+	if (updated) {
+		orb_copy(ORB_ID(vehicle_control_mode), _control_mode_sub, &_control_mode);
+	}
+}
+
 void
 MavlinkReceiver::handle_message(mavlink_message_t *msg)
 {
@@ -404,60 +412,56 @@ MavlinkReceiver::handle_message_quad_swarm_roll_pitch_yaw_thrust(mavlink_message
 			orb_publish(ORB_ID(offboard_control_setpoint), _offboard_control_sp_pub, &offboard_control_sp);
 		}
 
-		bool updated;
-		orb_check(_control_mode_sub, &updated);
-		if (updated) {
-			orb_copy(ORB_ID(vehicle_control_mode), _control_mode_sub, &_control_mode);
+		poll_control_mode();
 
-			if (_control_mode.flag_control_offboard_enabled) {
-				if (_control_mode.flag_control_position_enabled) {
-					// TODO
+		if (_control_mode.flag_control_offboard_enabled) {
+			if (ml_mode == OFFBOARD_CONTROL_MODE_DIRECT_POSITION) {
+				// TODO: fill position_setpoint_triplet
 
-				} else if (_control_mode.flag_control_velocity_enabled) {
-					// TODO
+			} else if (ml_mode == OFFBOARD_CONTROL_MODE_DIRECT_VELOCITY) {
+				// TODO
 
-				} else if (_control_mode.flag_control_attitude_enabled) {
-					/* attitude control */
-					struct vehicle_attitude_setpoint_s att_sp;
-					memset(&att_sp, 0, sizeof(att_sp));
+			} else if (ml_mode == OFFBOARD_CONTROL_MODE_DIRECT_ATTITUDE) {
+				/* attitude control */
+				struct vehicle_attitude_setpoint_s att_sp;
+				memset(&att_sp, 0, sizeof(att_sp));
 
-					att_sp.roll_body = offboard_control_sp.p1;
-					att_sp.pitch_body = offboard_control_sp.p2;
-					att_sp.yaw_body = offboard_control_sp.p3;
-					att_sp.thrust = offboard_control_sp.p4;
+				att_sp.roll_body = offboard_control_sp.p1;
+				att_sp.pitch_body = offboard_control_sp.p2;
+				att_sp.yaw_body = offboard_control_sp.p3;
+				att_sp.thrust = offboard_control_sp.p4;
 
-					att_sp.timestamp = hrt_absolute_time();
+				att_sp.timestamp = hrt_absolute_time();
 
-					if (_att_sp_pub < 0) {
-						_att_sp_pub = orb_advertise(ORB_ID(vehicle_attitude_setpoint), &att_sp);
-
-					} else {
-						orb_publish(ORB_ID(vehicle_attitude_setpoint), _att_sp_pub, &att_sp);
-					}
-
-				} else if (_control_mode.flag_control_rates_enabled) {
-					/* rates control */
-					struct vehicle_rates_setpoint_s rates_sp;
-					memset(&rates_sp, 0, sizeof(rates_sp));
-
-					rates_sp.roll = offboard_control_sp.p1;
-					rates_sp.pitch = offboard_control_sp.p2;
-					rates_sp.yaw = offboard_control_sp.p3;
-					rates_sp.thrust = offboard_control_sp.p4;
-
-					rates_sp.timestamp = hrt_absolute_time();
-
-					if (_rates_sp_pub < 0) {
-						_rates_sp_pub = orb_advertise(ORB_ID(vehicle_rates_setpoint), &rates_sp);
-
-					} else {
-						orb_publish(ORB_ID(vehicle_rates_setpoint), _rates_sp_pub, &rates_sp);
-					}
+				if (_att_sp_pub < 0) {
+					_att_sp_pub = orb_advertise(ORB_ID(vehicle_attitude_setpoint), &att_sp);
 
 				} else {
-					/* direct control */
-					// TODO
+					orb_publish(ORB_ID(vehicle_attitude_setpoint), _att_sp_pub, &att_sp);
 				}
+
+			} else if (ml_mode == OFFBOARD_CONTROL_MODE_DIRECT_RATES) {
+				/* rates control */
+				struct vehicle_rates_setpoint_s rates_sp;
+				memset(&rates_sp, 0, sizeof(rates_sp));
+
+				rates_sp.roll = offboard_control_sp.p1;
+				rates_sp.pitch = offboard_control_sp.p2;
+				rates_sp.yaw = offboard_control_sp.p3;
+				rates_sp.thrust = offboard_control_sp.p4;
+
+				rates_sp.timestamp = hrt_absolute_time();
+
+				if (_rates_sp_pub < 0) {
+					_rates_sp_pub = orb_advertise(ORB_ID(vehicle_rates_setpoint), &rates_sp);
+
+				} else {
+					orb_publish(ORB_ID(vehicle_rates_setpoint), _rates_sp_pub, &rates_sp);
+				}
+
+			} else {
+				/* direct control */
+				// TODO
 			}
 		}
 	}

@@ -118,6 +118,8 @@ private:
 	void handle_message_hil_gps(mavlink_message_t *msg);
 	void handle_message_hil_state_quaternion(mavlink_message_t *msg);
 
+	void poll_control_mode();
+
 	void *receive_thread(void *arg);
 
 	mavlink_status_t status;
