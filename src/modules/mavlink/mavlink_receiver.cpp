@@ -111,8 +111,18 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 	_old_timestamp(0),
 	_hil_local_proj_inited(0),
 	_hil_local_alt0(0.0)
+
+
+
 {
 	memset(&hil_local_pos, 0, sizeof(hil_local_pos));
+
+  // post rotation matrix for vicon data ROLL by PI
+  get_rot_matrix (ROTATION_ROLL_180, &_post_rot_vicon);
+
+  _mavlink_fd = open (MAVLINK_LOG_DEVICE, 0);
+
+
 }
 
 MavlinkReceiver::~MavlinkReceiver()
@@ -333,14 +343,19 @@ MavlinkReceiver::handle_message_vicon_position_estimate(mavlink_message_t *msg)
   // rotate 180 degrees around X-axis (roll).
   math::Matrix<3, 3> vicon_r;
   vicon_r.from_euler (pos.roll, pos.pitch, pos.yaw);
-  math::Matrix<3, 3> r;
-  get_rot_matrix (ROTATION_ROLL_180, &r);
-  vicon_r = vicon_r * r;
+  vicon_r = vicon_r * _post_rot_vicon;
   math::Vector<3> euler = vicon_r.to_euler ();
 
-	vicon_position.roll = euler (0) - 180;
+	vicon_position.roll = euler (0) - M_PI;
 	vicon_position.pitch = euler (1);
 	vicon_position.yaw = euler (2);
+
+
+  mavlink_log_info (_mavlink_fd, "%.7f %.7f %.7f", 
+                    vicon_position.roll, vicon_position.pitch, vicon_position.yaw);
+  
+
+
 
 	if (_vicon_position_pub < 0) {
 		_vicon_position_pub = orb_advertise(ORB_ID(vehicle_vicon_position), &vicon_position);
