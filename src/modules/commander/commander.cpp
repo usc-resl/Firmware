@@ -120,6 +120,7 @@ extern struct system_load_s system_load;
 #define POSITION_TIMEOUT		(600 * 1000)		/**< consider the local or global position estimate invalid after 600ms */
 #define FAILSAFE_DEFAULT_TIMEOUT	(3 * 1000 * 1000)	/**< hysteresis time - the failsafe will trigger after 3 seconds in this state */
 #define RC_TIMEOUT			500000
+#define OFFBOARD_TIMEOUT		500000
 #define DIFFPRESS_TIMEOUT		2000000
 
 #define PRINT_INTERVAL	5000000
@@ -160,6 +161,7 @@ static struct vehicle_status_s status;
 static struct actuator_armed_s armed;
 static struct safety_s safety;
 static struct vehicle_control_mode_s control_mode;
+static struct offboard_control_setpoint_s sp_offboard;
 
 /* tasks waiting for low prio thread */
 typedef enum {
@@ -457,6 +459,10 @@ bool handle_command(struct vehicle_status_s *status, const struct safety_s *safe
 				} else if (custom_main_mode == PX4_CUSTOM_MAIN_MODE_ACRO) {
 					/* ACRO */
 					main_res = main_state_transition(status, MAIN_STATE_ACRO);
+
+				} else if (custom_main_mode == PX4_CUSTOM_MAIN_MODE_OFFBOARD) {
+					/* OFFBOARD */
+					main_res = main_state_transition(status, MAIN_STATE_OFFBOARD);
 				}
 
 			} else {
@@ -657,6 +663,7 @@ int commander_thread_main(int argc, char *argv[])
 	main_states_str[2] = "POSCTL";
 	main_states_str[3] = "AUTO";
 	main_states_str[4] = "ACRO";
+	main_states_str[5] = "OFFBOARD";
 
 	char *arming_states_str[ARMING_STATE_MAX];
 	arming_states_str[0] = "INIT";
@@ -791,7 +798,6 @@ int commander_thread_main(int argc, char *argv[])
 
 	/* Subscribe to offboard control data */
 	int sp_offboard_sub = orb_subscribe(ORB_ID(offboard_control_setpoint));
-	struct offboard_control_setpoint_s sp_offboard;
 	memset(&sp_offboard, 0, sizeof(sp_offboard));
 
 	/* Subscribe to global position */
@@ -1337,7 +1343,7 @@ int commander_thread_main(int argc, char *argv[])
 						}
 					}
 
-				} else {
+				} else if (status.main_state == MAIN_STATE_MANUAL) {
 					/* failsafe for manual modes */
 					transition_result_t manual_res = TRANSITION_DENIED;
 
@@ -1355,13 +1361,60 @@ int commander_thread_main(int argc, char *argv[])
 							(void)failsafe_state_transition(&status, FAILSAFE_STATE_TERMINATION);
 						}
 					}
-				}
+				} else if (status.main_state == MAIN_STATE_OFFBOARD) {
+					transition_result_t offboard_res = TRANSITION_DENIED;
+					/* check if OFFBOARD mode still allowed */
+					offboard_res = main_state_transition(&status, MAIN_STATE_OFFBOARD);
 
+					if (offboard_res == TRANSITION_DENIED) {
+						/* not in OFFBOARD mode or OFFBOARD is not allowed anymore, switch to failsafe */
+						transition_result_t failsafe_res = TRANSITION_DENIED;
+
+						if (!status.condition_landed) {
+							/* vehicle is not landed, try to perform RTL */
+							failsafe_res = failsafe_state_transition(&status, FAILSAFE_STATE_RTL);
+						}
+
+						if (failsafe_res == TRANSITION_DENIED) {
+							/* RTL not allowed (no global position estimate) or not wanted, try LAND */
+							failsafe_res = failsafe_state_transition(&status, FAILSAFE_STATE_LAND);
+
+							if (failsafe_res == TRANSITION_DENIED) {
+								/* LAND not allowed, set TERMINATION state */
+								(void)failsafe_state_transition(&status, FAILSAFE_STATE_TERMINATION);
+							}
+						}
+					}
+				}
 			} else {
 				if (status.failsafe_state != FAILSAFE_STATE_NORMAL) {
 					/* reset failsafe when disarmed */
 					(void)failsafe_state_transition(&status, FAILSAFE_STATE_NORMAL);
 				}
+			}
+		}
+
+		/* check offboard signal */
+		if (sp_offboard.timestamp != 0 && hrt_absolute_time() < sp_offboard.timestamp + OFFBOARD_TIMEOUT) {
+			if (!status.offboard_control_signal_found_once) {
+				status.offboard_control_signal_found_once = true;
+				mavlink_log_info(mavlink_fd, "[cmd] detected offboard signal first time");
+				status_changed = true;
+
+			} else {
+				if (status.offboard_control_signal_lost) {
+					mavlink_log_info(mavlink_fd, "[cmd] offboard signal regained");
+					status_changed = true;
+				}
+			}
+
+			status.offboard_control_signal_lost = false;
+
+		} else {
+			if (!status.offboard_control_signal_lost) {
+				mavlink_log_critical(mavlink_fd, "[cmd[ CRITICAL: OFFBOARD SIGNAL LOST");
+				status.offboard_control_signal_lost = true;
+				status_changed = true;
 			}
 		}
 
@@ -1618,6 +1671,18 @@ set_main_state_rc(struct vehicle_status_s *status, struct manual_control_setpoin
 	/* set main state according to RC switches */
 	transition_result_t res = TRANSITION_DENIED;
 
+	/* offboard switch overrides main switch */
+	if (sp_man->offboard_switch == SWITCH_POS_ON) {
+		res = main_state_transition(status, MAIN_STATE_OFFBOARD);
+		if (res == TRANSITION_DENIED) {
+			print_reject_mode(status, "OFFBOARD");
+
+		} else {
+			return res;
+		}
+	}
+
+	/* offboard switched off or denied, check main mode switch */
 	switch (sp_man->mode_switch) {
 	case SWITCH_POS_NONE:
 		res = TRANSITION_NOT_CHANGED;
@@ -1695,6 +1760,7 @@ set_control_mode()
 	control_mode.flag_armed = armed.armed;
 	control_mode.flag_external_manual_override_ok = !status.is_rotary_wing;
 	control_mode.flag_system_hil_enabled = status.hil_state == HIL_STATE_ON;
+	control_mode.flag_control_offboard_enabled = false;
 
 	control_mode.flag_control_termination_enabled = false;
 
@@ -1750,6 +1816,39 @@ set_control_mode()
 			control_mode.flag_control_climb_rate_enabled = false;
 			control_mode.flag_control_position_enabled = false;
 			control_mode.flag_control_velocity_enabled = false;
+			break;
+
+		case MAIN_STATE_OFFBOARD:
+			control_mode.flag_control_manual_enabled = false;
+			control_mode.flag_control_auto_enabled = false;
+			control_mode.flag_control_offboard_enabled = true;
+
+			switch (sp_offboard.mode) {
+			case OFFBOARD_CONTROL_MODE_DIRECT_ATTITUDE:
+				control_mode.flag_control_rates_enabled = true;
+				control_mode.flag_control_attitude_enabled = true;
+				control_mode.flag_control_altitude_enabled = false;
+				control_mode.flag_control_climb_rate_enabled = false;
+				control_mode.flag_control_position_enabled = false;
+				control_mode.flag_control_velocity_enabled = false;
+				break;
+			case OFFBOARD_CONTROL_MODE_DIRECT_RATES:
+				control_mode.flag_control_rates_enabled = true;
+				control_mode.flag_control_attitude_enabled = false;
+				control_mode.flag_control_altitude_enabled = false;
+				control_mode.flag_control_climb_rate_enabled = false;
+				control_mode.flag_control_position_enabled = false;
+				control_mode.flag_control_velocity_enabled = false;
+				break;
+			default:
+				control_mode.flag_control_rates_enabled = false;
+				control_mode.flag_control_attitude_enabled = false;
+				control_mode.flag_control_altitude_enabled = false;
+				control_mode.flag_control_climb_rate_enabled = false;
+				control_mode.flag_control_position_enabled = false;
+				control_mode.flag_control_velocity_enabled = false;
+			}
+
 			break;
 
 		default:
