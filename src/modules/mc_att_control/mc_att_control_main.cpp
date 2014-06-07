@@ -75,6 +75,10 @@
 #include <lib/mathlib/mathlib.h>
 #include <lib/geo/geo.h>
 
+// >>>> DEBUG
+#include <fcntl.h>
+#include <mavlink/mavlink_log.h>
+
 /**
  * Multicopter attitude control app start / stop handling function
  *
@@ -181,6 +185,11 @@ private:
 		math::Vector<3> acro_rate_max;		/**< max attitude rates in acro mode */
 	}		_params;
 
+
+
+  // >>>> DEBUG
+  int _mavlink_fd;
+
 	/**
 	 * Update our local parameter cache.
 	 */
@@ -271,6 +280,9 @@ MulticopterAttitudeControl::MulticopterAttitudeControl() :
 	_loop_perf(perf_alloc(PC_ELAPSED, "mc_att_control"))
 
 {
+  // <<<< DEBUG
+  _mavlink_fd = -1;
+
 	memset(&_v_att, 0, sizeof(_v_att));
 	memset(&_v_att_sp, 0, sizeof(_v_att_sp));
 	memset(&_v_rates_sp, 0, sizeof(_v_rates_sp));
@@ -490,6 +502,13 @@ MulticopterAttitudeControl::arming_status_poll()
 void
 MulticopterAttitudeControl::control_attitude(float dt)
 {
+  mavlink_log_info (_mavlink_fd, "att: %0.3f %0.3f %0.3f %0.3f %0.3f",
+                    _v_att_sp.roll_body, _v_att_sp.pitch_body, _v_att_sp.yaw_body, _v_att_sp.thrust,
+                    _manual_control_sp.r );
+  
+
+
+
 	float yaw_sp_move_rate = 0.0f;
 	bool publish_att_sp = false;
 
@@ -737,7 +756,18 @@ MulticopterAttitudeControl::task_main()
 	fds[0].fd = _v_att_sub;
 	fds[0].events = POLLIN;
 
+  // >>>>>>> DEBUG
+  int counter = 0;
+
 	while (!_task_should_exit) {
+
+  // >>>>>>> DEBUG
+    if (_mavlink_fd < 0 && counter % (1000 ) == 0)
+      _mavlink_fd = open(MAVLINK_LOG_DEVICE, 0);
+    
+    counter++;
+
+
 
 		/* wait for up to 100ms for data */
 		int pret = poll(&fds[0], (sizeof(fds) / sizeof(fds[0])), 100);

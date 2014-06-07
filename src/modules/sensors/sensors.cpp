@@ -83,6 +83,9 @@
 #include <uORB/topics/differential_pressure.h>
 #include <uORB/topics/airspeed.h>
 
+// >>>>> DEBUG
+#include <mavlink/mavlink_log.h>
+
 #define GYRO_HEALTH_COUNTER_LIMIT_ERROR 20   /* 40 ms downtime at 500 Hz update rate   */
 #define ACC_HEALTH_COUNTER_LIMIT_ERROR  20   /* 40 ms downtime at 500 Hz update rate   */
 #define MAGN_HEALTH_COUNTER_LIMIT_ERROR 100  /* 1000 ms downtime at 100 Hz update rate  */
@@ -232,6 +235,10 @@ private:
 
 	uint64_t _battery_discharged;			/**< battery discharged current in mA*ms */
 	hrt_abstime _battery_current_timestamp;	/**< timestamp of last battery current reading */
+
+
+    // >>>>> DEBUG
+    int _mavlink_fd;
 
 	struct {
 		float min[_rc_max_chan_count];
@@ -496,6 +503,9 @@ Sensors::Sensors() :
 	_battery_discharged(0),
 	_battery_current_timestamp(0)
 {
+  // >>>> DEBUG
+  _mavlink_fd = -1;
+
 	memset(&_rc, 0, sizeof(_rc));
 
 	/* basic r/c parameters */
@@ -1647,7 +1657,17 @@ Sensors::task_main()
 	fds[0].fd = _gyro_sub;
 	fds[0].events = POLLIN;
 
+  // >>>>>>> DEBUG
+  int counter = 0;
+
 	while (!_task_should_exit) {
+
+  // >>>>>>> DEBUG
+    if (_mavlink_fd < 0 && counter % (1000 ) == 0)
+      _mavlink_fd = open(MAVLINK_LOG_DEVICE, 0);
+    
+    counter++;
+
 
 		/* wait for up to 50ms for data */
 		int pret = poll(&fds[0], (sizeof(fds) / sizeof(fds[0])), 50);

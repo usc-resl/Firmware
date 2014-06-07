@@ -1671,16 +1671,7 @@ set_main_state_rc(struct vehicle_status_s *status, struct manual_control_setpoin
 	/* set main state according to RC switches */
 	transition_result_t res = TRANSITION_DENIED;
 
-	/* offboard switch overrides main switch */
-	if (sp_man->offboard_switch == SWITCH_POS_ON) {
-		res = main_state_transition(status, MAIN_STATE_OFFBOARD);
-		if (res == TRANSITION_DENIED) {
-			print_reject_mode(status, "OFFBOARD");
-
-		} else {
-			return res;
-		}
-	}
+  //mavlink_log_info (mavlink_fd, "switch pos: %d", sp_man->mode_switch);
 
 	/* offboard switched off or denied, check main mode switch */
 	switch (sp_man->mode_switch) {
@@ -1698,29 +1689,16 @@ set_main_state_rc(struct vehicle_status_s *status, struct manual_control_setpoin
 		// TRANSITION_DENIED is not possible here
 		break;
 
-	case SWITCH_POS_MIDDLE:		// ASSIST
-		if (sp_man->posctl_switch == SWITCH_POS_ON) {
-			res = main_state_transition(status, MAIN_STATE_POSCTL);
+	case SWITCH_POS_MIDDLE:		// OFFBOARD
+    res = main_state_transition(status, MAIN_STATE_OFFBOARD);
 
-			if (res != TRANSITION_DENIED) {
-				break;	// changed successfully or already in this state
-			}
+    if (res != TRANSITION_DENIED) {
+      break;	// changed successfully or already in this state
+    }
 
-			// else fallback to ALTCTL
-			print_reject_mode(status, "POSCTL");
-		}
-
-		res = main_state_transition(status, MAIN_STATE_ALTCTL);
-
-		if (res != TRANSITION_DENIED) {
-			break;	// changed successfully or already in this mode
-		}
-
-		if (sp_man->posctl_switch != SWITCH_POS_ON) {
-			print_reject_mode(status, "ALTCTL");
-		}
-
-		// else fallback to MANUAL
+    print_reject_mode(status, "OFFBOARD");
+		
+    // else fallback to MANUAL
 		res = main_state_transition(status, MAIN_STATE_MANUAL);
 		// TRANSITION_DENIED is not possible here
 		break;
