@@ -68,6 +68,7 @@
 #include <uORB/topics/vehicle_control_mode.h>
 #include <uORB/topics/actuator_armed.h>
 #include <uORB/topics/parameter_update.h>
+#include <uORB/topics/offboard_control_setpoint.h>
 #include <systemlib/param/param.h>
 #include <systemlib/err.h>
 #include <systemlib/perf_counter.h>
@@ -122,6 +123,8 @@ private:
 	int		_params_sub;			/**< parameter updates subscription */
 	int		_manual_control_sp_sub;	/**< manual control setpoint subscription */
 	int		_armed_sub;				/**< arming status subscription */
+    int _offboard_control_sp_sub;
+    
 
 	orb_advert_t	_att_sp_pub;			/**< attitude setpoint publication */
 	orb_advert_t	_v_rates_sp_pub;		/**< rate setpoint publication */
@@ -134,6 +137,8 @@ private:
 	struct vehicle_control_mode_s		_v_control_mode;	/**< vehicle control mode */
 	struct actuator_controls_s			_actuators;			/**< actuator controls */
 	struct actuator_armed_s				_armed;				/**< actuator arming status */
+    struct offboard_control_setpoint_s _offboard_control_sp;
+    
 
 	perf_counter_t	_loop_perf;			/**< loop performance counter */
 
@@ -211,6 +216,11 @@ private:
 	void		vehicle_manual_poll();
 
 	/**
+	 * Check for changes in offboard inputs.
+	 */
+	void		vehicle_offboard_poll();
+
+	/**
 	 * Check for attitude setpoint updates.
 	 */
 	void		vehicle_attitude_setpoint_poll();
@@ -270,6 +280,7 @@ MulticopterAttitudeControl::MulticopterAttitudeControl() :
 	_params_sub(-1),
 	_manual_control_sp_sub(-1),
 	_armed_sub(-1),
+    _offboard_control_sp_sub (-1),
 
 /* publications */
 	_att_sp_pub(-1),
@@ -290,6 +301,7 @@ MulticopterAttitudeControl::MulticopterAttitudeControl() :
 	memset(&_v_control_mode, 0, sizeof(_v_control_mode));
 	memset(&_actuators, 0, sizeof(_actuators));
 	memset(&_armed, 0, sizeof(_armed));
+    memset (&_offboard_control_sp, 0, sizeof (_offboard_control_sp));
 
 	_params.att_p.zero();
 	_params.rate_p.zero();
@@ -459,6 +471,19 @@ MulticopterAttitudeControl::vehicle_manual_poll()
 }
 
 void
+MulticopterAttitudeControl::vehicle_offboard_poll()
+{
+	bool updated;
+
+	/* get pilots inputs */
+	orb_check(_offboard_control_sp_sub, &updated);
+
+	if (updated) {
+		orb_copy(ORB_ID(offboard_control_setpoint), _offboard_control_sp_sub, &_offboard_control_sp);
+	}
+}
+
+void
 MulticopterAttitudeControl::vehicle_attitude_setpoint_poll()
 {
 	/* check if there is a new setpoint */
@@ -502,13 +527,6 @@ MulticopterAttitudeControl::arming_status_poll()
 void
 MulticopterAttitudeControl::control_attitude(float dt)
 {
-  mavlink_log_info (_mavlink_fd, "att: %0.3f %0.3f %0.3f %0.3f %0.3f",
-                    _v_att_sp.roll_body, _v_att_sp.pitch_body, _v_att_sp.yaw_body, _v_att_sp.thrust,
-                    _manual_control_sp.r );
-  
-
-
-
 	float yaw_sp_move_rate = 0.0f;
 	bool publish_att_sp = false;
 
@@ -569,7 +587,66 @@ MulticopterAttitudeControl::control_attitude(float dt)
 			_v_att_sp.R_valid = false;
 			publish_att_sp = true;
 		}
+  }
+  
+  else if (_v_control_mode.flag_control_offboard_enabled)
+  {
+		/* offboard input, set or modify attitude setpoint */
 
+		if (_v_control_mode.flag_control_velocity_enabled || _v_control_mode.flag_control_climb_rate_enabled) {
+			/* in assisted modes poll 'vehicle_attitude_setpoint' topic and modify it */
+			vehicle_attitude_setpoint_poll();
+		}
+
+		if (!_v_control_mode.flag_control_climb_rate_enabled) {
+			/* pass throttle directly if not in altitude stabilized mode */
+			_v_att_sp.thrust = _offboard_control_sp.p4;
+			publish_att_sp = true;
+		}
+
+		if (!_armed.armed) {
+			/* reset yaw setpoint when disarmed */
+			_reset_yaw_sp = true;
+		}
+
+		/* move yaw setpoint in all modes */
+		if (_v_att_sp.thrust < 0.1f) {
+			// TODO
+			//if (_status.condition_landed) {
+			/* reset yaw setpoint if on ground */
+			//	reset_yaw_sp = true;
+			//}
+		} else {
+			/* move yaw setpoint */
+			yaw_sp_move_rate = _offboard_control_sp.p3;
+			_v_att_sp.yaw_body = _wrap_pi(_v_att_sp.yaw_body + yaw_sp_move_rate * dt);
+			float yaw_offs_max = _params.man_yaw_max / _params.att_p(2);
+			float yaw_offs = _wrap_pi(_v_att_sp.yaw_body - _v_att.yaw);
+			if (yaw_offs < - yaw_offs_max) {
+				_v_att_sp.yaw_body = _wrap_pi(_v_att.yaw - yaw_offs_max);
+
+			} else if (yaw_offs > yaw_offs_max) {
+				_v_att_sp.yaw_body = _wrap_pi(_v_att.yaw + yaw_offs_max);
+			}
+			_v_att_sp.R_valid = false;
+			publish_att_sp = true;
+		}
+
+		/* reset yaw setpint to current position if needed */
+		if (_reset_yaw_sp) {
+			_reset_yaw_sp = false;
+			_v_att_sp.yaw_body = _v_att.yaw;
+			_v_att_sp.R_valid = false;
+			publish_att_sp = true;
+		}
+
+		if (!_v_control_mode.flag_control_velocity_enabled) {
+			/* update attitude setpoint if not in position control mode */
+			_v_att_sp.roll_body = _offboard_control_sp.p1;
+			_v_att_sp.pitch_body = -_offboard_control_sp.p2;
+			_v_att_sp.R_valid = false;
+			publish_att_sp = true;
+		}
 	} else {
 		/* in non-manual mode use 'vehicle_attitude_setpoint' topic */
 		vehicle_attitude_setpoint_poll();
@@ -607,6 +684,8 @@ MulticopterAttitudeControl::control_attitude(float dt)
 			_att_sp_pub = orb_advertise(ORB_ID(vehicle_attitude_setpoint), &_v_att_sp);
 		}
 	}
+
+  //mavlink_log_info (_mavlink_fd, "att: %0.3f %0.3f %0.3f %0.3f", _v_att_sp.roll_body, _v_att_sp.pitch_body, _v_att_sp.yaw_body, _v_att_sp.thrust );
 
 	/* rotation matrix for current state */
 	math::Matrix<3, 3> R;
@@ -746,6 +825,7 @@ MulticopterAttitudeControl::task_main()
 	_params_sub = orb_subscribe(ORB_ID(parameter_update));
 	_manual_control_sp_sub = orb_subscribe(ORB_ID(manual_control_setpoint));
 	_armed_sub = orb_subscribe(ORB_ID(actuator_armed));
+	_offboard_control_sp_sub = orb_subscribe(ORB_ID(offboard_control_setpoint));
 
 	/* initialize parameters cache */
 	parameters_update();
@@ -808,6 +888,8 @@ MulticopterAttitudeControl::task_main()
 			vehicle_control_mode_poll();
 			arming_status_poll();
 			vehicle_manual_poll();
+      		vehicle_offboard_poll ();
+      
 
 			if (_v_control_mode.flag_control_attitude_enabled) {
 				control_attitude(dt);
