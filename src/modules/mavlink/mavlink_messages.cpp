@@ -140,6 +140,9 @@ void get_mavlink_mode_state(struct vehicle_status_s *status, struct position_set
 		} else if (status->main_state == MAIN_STATE_ACRO) {
 			*mavlink_base_mode |= MAV_MODE_FLAG_MANUAL_INPUT_ENABLED;
 			custom_mode.main_mode = PX4_CUSTOM_MAIN_MODE_ACRO;
+
+		} else if (status->main_state == MAIN_STATE_OFFBOARD) {
+			custom_mode.main_mode = PX4_CUSTOM_MAIN_MODE_OFFBOARD;
 		}
 
 	} else {
