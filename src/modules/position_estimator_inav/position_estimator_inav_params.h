@@ -56,10 +56,8 @@ struct position_estimator_inav_params {
 	float land_t;
 	float land_disp;
 	float land_thr;
-//AB---
-float w_xyz_vicon;
-float w_yaw_vicon;
-//---AB
+	float w_xyz_vicon;
+	float w_yaw_vicon;
 };
 
 struct position_estimator_inav_param_handles {
@@ -78,10 +76,8 @@ struct position_estimator_inav_param_handles {
 	param_t land_t;
 	param_t land_disp;
 	param_t land_thr;
-//AB---
-param_t w_xyz_vicon;
-param_t w_yaw_vicon;
-//---AB
+	param_t w_xyz_vicon;
+	param_t w_yaw_vicon;
 };
 
 /**
