@@ -452,6 +452,10 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 				if (sensor.baro_timestamp != baro_timestamp) {
 					corr_baro = baro_offset - sensor.baro_alt_meter - z_est[0];
 					baro_timestamp = sensor.baro_timestamp;
+
+					mavlink_log_info(mavlink_fd, "[inav] Output #0: %.3f %.3f %.3f %.3f",
+									 baro_offset, sensor.baro_alt_meter, z_est[0], corr_baro);
+
 					baro_updates++;
 				}
 			}
@@ -737,6 +741,12 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 					memset(corr_vicon, 0, sizeof(corr_vicon));
 				}
 
+
+				mavlink_log_info(mavlink_fd, "[inav] Output #1: %.3f %.3f %.3f %.3f %.3f",
+								 x_est[0], y_est[0], z_est[0], vicon.yaw, att.yaw);
+				mavlink_log_info(mavlink_fd, "[inav] Output #2: %.3f %.3f %.3f %.3f",
+								 corr_vicon[0], corr_vicon[1], corr_vicon[2], corr_vicon_yaw);
+
 				vicon_updates++;
 			}
 
@@ -771,6 +781,7 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 		//	mavlink_log_info(mavlink_fd, "[inav] Vicon timeout");
 		//}
 
+
 		float dt = t_prev > 0 ? (t - t_prev) / 1000000.0f : 0.0f;
 		dt = fmaxf(fminf(0.02, dt), 0.002);		// constrain dt from 2 to 20 ms
 		t_prev = t;
@@ -778,6 +789,8 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 		/* increase EPH/EPV on each step */
 		eph *= 1.0 + dt;
 		epv += 0.005 * dt;	// add 1m to EPV each 200s (baro drift)
+
+		mavlink_log_info(mavlink_fd, "[inav] Output #3: %.3f %.3f %.3f", dt, eph, epv);
 
 		/* use Vicon if it's valid */
 		bool use_vicon = vicon_valid && params.w_xyz_vicon > MIN_VALID_W;
@@ -793,6 +806,7 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 		if (use_vicon || use_gps_xy || use_flow) {
 			xy_src_time = t;
 		}
+
 
 		bool can_estimate_xy = eph < max_eph_epv * 1.5;
 
@@ -874,9 +888,15 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 			}
 		}
 
+		mavlink_log_info(mavlink_fd, "[inav] Output #4: %.3f %.3f %.3f %.3f %.3f %.3f",
+						 accel_bias_corr[0], accel_bias_corr[1], accel_bias_corr[2], acc_bias[0], acc_bias[1], acc_bias[2]);
+
+		float zEst_1, zEst_2, zEst_3, zEst_4; // debug
 
 		/* inertial filter prediction for altitude */
 		inertial_filter_predict(dt, z_est, acc[2]);
+
+		zEst_1 = z_est[0];
 
 		if (!(isfinite(z_est[0]) && isfinite(z_est[1]))) {
 			write_debug_log("BAD ESTIMATE AFTER Z PREDICTION", dt, x_est, y_est, z_est, x_est_prev, y_est_prev, z_est_prev, acc, corr_gps, w_xy_gps_p, w_xy_gps_v);
@@ -885,8 +905,19 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 
 		/* inertial filter correction for altitude */
 		inertial_filter_correct(corr_baro, dt, z_est, 0, params.w_z_baro);
+
+		zEst_2 = z_est[0];
+
 		inertial_filter_correct(corr_gps[2][0], dt, z_est, 0, w_z_gps_p);
+
+		zEst_3 = z_est[0];
+
 		inertial_filter_correct(corr_vicon[2], dt, z_est, 0, params.w_xyz_vicon);
+
+		zEst_4 = z_est[0];
+
+		mavlink_log_info(mavlink_fd, "[inav] Output #5: %.3f %.3f %.3f %.3f",
+						 zEst_1, zEst_2, zEst_3, zEst_4);
 
 		if (!(isfinite(z_est[0]) && isfinite(z_est[1]))) {
 			write_debug_log("BAD ESTIMATE AFTER Z CORRECTION", dt, x_est, y_est, z_est, x_est_prev, y_est_prev, z_est_prev, acc, corr_gps, w_xy_gps_p, w_xy_gps_v);
@@ -898,6 +929,8 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 			memcpy(z_est_prev, z_est, sizeof(z_est));
 		}
 
+
+		float xEst_1, xEst_2, yEst_1, yEst_2;
 
 		if (can_estimate_xy) {
 			/* inertial filter prediction for position */
@@ -926,10 +959,20 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 				}
 			}
 
+			xEst_1 = x_est[0];
+			yEst_1 = y_est[0];
+
 			if (use_vicon) {
 				inertial_filter_correct(corr_vicon[0], dt, x_est, 0, params.w_xyz_vicon);
 				inertial_filter_correct(corr_vicon[1], dt, y_est, 0, params.w_xyz_vicon);
 			}
+
+
+			xEst_2 = x_est[0];
+			yEst_2 = y_est[0];
+
+			mavlink_log_info(mavlink_fd, "[inav] Output #6: %.3f %.3f %.3f %.3f",
+							 xEst_1, yEst_1, xEst_2, yEst_2);
 
 			if (!(isfinite(x_est[0]) && isfinite(x_est[1]) && isfinite(y_est[0]) && isfinite(y_est[1]))) {
 				write_debug_log("BAD ESTIMATE AFTER CORRECTION", dt, x_est, y_est, z_est, x_est_prev, y_est_prev, z_est_prev, acc, corr_gps, w_xy_gps_p, w_xy_gps_v);
@@ -1006,6 +1049,16 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 					attitude_updates / updates_dt,
 					flow_updates / updates_dt,
 					vicon_updates / updates_dt);
+
+
+				mavlink_log_info(mavlink_fd, "[inav] Output #7: %.1f/s %.1f/s %.1f/s %.1f/s %.1f/s %.1f/s",
+						accel_updates / updates_dt,
+						baro_updates / updates_dt,
+						gps_updates / updates_dt,
+						attitude_updates / updates_dt,
+						flow_updates / updates_dt,
+						vicon_updates / updates_dt);
+
 				updates_counter_start = t;
 				accel_updates = 0;
 				baro_updates = 0;
@@ -1042,8 +1095,8 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 
 			local_pos.timestamp = t;
 
-      mavlink_log_info (mavlink_fd, "[inav] %.3f %.3f %.3f %.3f %.3f %.3f",
-                        local_pos.x, local_pos.y, local_pos.z, local_pos.vx, local_pos.vy, local_pos.vz);
+			mavlink_log_info(mavlink_fd, "[inav] %.3f %.3f %.3f %.3f %.3f %.3f %.3f",
+                        	 local_pos.x, local_pos.y, local_pos.z, local_pos.vx, local_pos.vy, local_pos.vz, local_pos.yaw);
 
       
 			orb_publish(ORB_ID(vehicle_local_position), vehicle_local_position_pub, &local_pos);
