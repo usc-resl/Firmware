@@ -78,6 +78,9 @@ static bool thread_running = false; /**< Deamon status flag */
 static int position_estimator_inav_task; /**< Handle of deamon task / thread */
 static bool verbose_mode = false;
 
+//AB---
+static const hrt_abstime vicon_topic_timeout = 1000000; // Vicon topic timeout = 1s
+//---AB
 static const hrt_abstime gps_topic_timeout = 1000000;		// GPS topic timeout = 1s
 static const hrt_abstime flow_topic_timeout = 1000000;	// optical flow topic timeout = 1s
 static const hrt_abstime sonar_timeout = 150000;	// sonar timeout = 150ms
@@ -232,6 +235,9 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 	uint16_t gps_updates = 0;
 	uint16_t attitude_updates = 0;
 	uint16_t flow_updates = 0;
+//AB---
+uint16_t vicon_updates = 0;
+//---AB
 
 	hrt_abstime updates_counter_start = hrt_absolute_time();
 	hrt_abstime pub_last = hrt_absolute_time();
@@ -252,6 +258,12 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 	};
 	float w_gps_xy = 1.0f;
 	float w_gps_z = 1.0f;
+
+//AB---
+float corr_vicon[] = { 0.0f, 0.0f, 0.0f }; // x-, y-, z-positions in NED earth-fixed frame
+float corr_vicon_yaw = 0.0f; // yaw attitude
+//---AB
+
 	float corr_sonar = 0.0f;
 	float corr_sonar_filtered = 0.0f;
 
@@ -271,6 +283,9 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 	bool sonar_valid = false;		// sonar is valid
 	bool flow_valid = false;		// flow is valid
 	bool flow_accurate = false;		// flow should be accurate (this flag not updated if flow_valid == false)
+//AB---
+bool vicon_valid = false;
+//---AB
 
 	/* declare and safely initialize all structs */
 	struct actuator_controls_s actuator;
@@ -291,8 +306,10 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 	memset(&flow, 0, sizeof(flow));
 	struct vehicle_global_position_s global_pos;
 	memset(&global_pos, 0, sizeof(global_pos));
-  struct vehicle_vicon_position_s vicon_pos;
-  memset (&vicon_pos, 0, sizeof (vicon_pos));
+//AB---
+struct vehicle_vicon_position_s vicon;
+memset(&vicon, 0, sizeof (vicon));
+//---AB
 
 	/* subscribe */
 	int parameter_update_sub = orb_subscribe(ORB_ID(parameter_update));
@@ -303,7 +320,9 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 	int optical_flow_sub = orb_subscribe(ORB_ID(optical_flow));
 	int vehicle_gps_position_sub = orb_subscribe(ORB_ID(vehicle_gps_position));
 	int home_position_sub = orb_subscribe(ORB_ID(home_position));
-  int vehicle_vicon_position_sub = orb_subscribe (ORB_ID (vehicle_vicon_position));
+//AB---
+int vehicle_vicon_position_sub = orb_subscribe(ORB_ID(vehicle_vicon_position));
+//---AB
   
 	/* advertise */
 	orb_advert_t vehicle_local_position_pub = orb_advertise(ORB_ID(vehicle_local_position), &local_pos);
@@ -693,7 +712,49 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 
 				gps_updates++;
 			}
+
+//AB---
+/* vehicle Vicon position */
+orb_check(vehicle_vicon_position_sub, &updated);
+
+if (updated) {
+	orb_copy(ORB_ID(vehicle_vicon_position), vehicle_vicon_position_sub, &vicon);
+
+	vicon_valid = vicon.valid;
+
+	if (vicon_valid) {
+		/* set Vicon position estimate */
+		x_est[0] = vicon.x;
+		y_est[0] = vicon.y;
+		z_est[0] = vicon.z;
+
+		/* calculate correction for position */
+		corr_vicon[0] = vicon.x - x_est[0];
+		corr_vicon[1] = vicon.y - y_est[0];
+		corr_vicon[2] = vicon.z - z_est[0];
+
+		/* calculate correction for yaw attitude */
+		corr_vicon_yaw = vicon.yaw - att.yaw;
+		if (corr_vicon_yaw > M_PI_F) {
+			corr_vicon_yaw -= M_TWOPI_F;
 		}
+		if (corr_vicon_yaw < -M_PI_F) {
+			corr_vicon_yaw += M_TWOPI_F;
+		}
+
+		eph = fminf(eph, 0.1);	// for Vicon, assume EPH = 10 cm
+	}
+	else {
+		/* no Vicon data */
+		memset(corr_vicon, 0, sizeof(corr_vicon));
+	}
+
+	vicon_updates++;
+}
+//---AB
+
+		}
+
 
 		/* check for timeout on FLOW topic */
 		if ((flow_valid || sonar_valid) && t > flow.timestamp + flow_topic_timeout) {
@@ -716,6 +777,17 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 			sonar_valid = false;
 		}
 
+//AB---
+/* check for timeout on Vicon topic */
+//TODO: requires sync of different times (ROS time, PX4 time, etc.)
+//if (vicon_valid && t > vicon.timestamp + vicon_topic_timeout) {
+//	vicon_valid = false;
+//	warnx("Vicon timeout");
+//	mavlink_log_info(mavlink_fd, "[inav] Vicon timeout");
+//}
+//---AB
+
+
 		float dt = t_prev > 0 ? (t - t_prev) / 1000000.0f : 0.0f;
 		dt = fmaxf(fminf(0.02, dt), 0.002);		// constrain dt from 2 to 20 ms
 		t_prev = t;
@@ -724,16 +796,23 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 		eph *= 1.0 + dt;
 		epv += 0.005 * dt;	// add 1m to EPV each 200s (baro drift)
 
-		/* use GPS if it's valid and reference position initialized */
-		bool use_gps_xy = ref_inited && gps_valid && params.w_xy_gps_p > MIN_VALID_W;
-		bool use_gps_z = ref_inited && gps_valid && params.w_z_gps_p > MIN_VALID_W;
-		/* use flow if it's valid and (accurate or no GPS available) */
-		bool use_flow = flow_valid && (flow_accurate || !use_gps_xy);
+//AB---
+/* use Vicon if it's valid */
+bool use_vicon = vicon_valid && params.w_xyz_vicon > MIN_VALID_W;
 
-		/* try to estimate position during some time after position sources lost */
-		if (use_gps_xy || use_flow) {
-			xy_src_time = t;
-		}
+/* use GPS if it's valid and reference position initialized and no Vicon available */
+bool use_gps_xy = !vicon_valid && ref_inited && gps_valid && params.w_xy_gps_p > MIN_VALID_W;
+bool use_gps_z = !vicon_valid && ref_inited && gps_valid && params.w_z_gps_p > MIN_VALID_W;
+
+/* use flow if it's valid and (accurate or (no GPS and Vicon available)) */
+bool use_flow = flow_valid && (flow_accurate || (!use_gps_xy && !use_vicon));
+
+/* try to estimate position during some time after position sources lost */
+if (use_vicon || use_gps_xy || use_flow) {
+	xy_src_time = t;
+}
+//---AB
+
 
 		bool can_estimate_xy = eph < max_eph_epv * 1.5;
 
@@ -761,6 +840,13 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 		}
 
 		/* baro offset correction */
+//AB---
+if (use_vicon) {
+	float offs_corr = corr_vicon[2] * params.w_xyz_vicon * dt;
+	baro_offset += offs_corr;
+	corr_baro += offs_corr;
+}
+//---AB
 		if (use_gps_z) {
 			float offs_corr = corr_gps[2][0] * w_z_gps_p * dt;
 			baro_offset += offs_corr;
@@ -769,6 +855,15 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 
 		/* accelerometer bias correction */
 		float accel_bias_corr[3] = { 0.0f, 0.0f, 0.0f };
+
+//AB---
+if (use_vicon) {
+	float w_xyz_vicon2 = params.w_xyz_vicon * params.w_xyz_vicon;
+	accel_bias_corr[0] -= corr_vicon[0] * w_xyz_vicon2;
+	accel_bias_corr[1] -= corr_vicon[1] * w_xyz_vicon2;
+	accel_bias_corr[2] -= corr_vicon[2] * w_xyz_vicon2;
+}
+//---AB
 
 		if (use_gps_xy) {
 			accel_bias_corr[0] -= corr_gps[0][0] * w_xy_gps_p * w_xy_gps_p;
@@ -780,6 +875,7 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 		if (use_gps_z) {
 			accel_bias_corr[2] -= corr_gps[2][0] * w_z_gps_p * w_z_gps_p;
 		}
+
 
 		if (use_flow) {
 			accel_bias_corr[0] -= corr_flow[0] * params.w_xy_flow;
@@ -801,6 +897,7 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 			}
 		}
 
+
 		/* inertial filter prediction for altitude */
 		inertial_filter_predict(dt, z_est, acc[2]);
 
@@ -812,16 +909,22 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 		/* inertial filter correction for altitude */
 		inertial_filter_correct(corr_baro, dt, z_est, 0, params.w_z_baro);
 		inertial_filter_correct(corr_gps[2][0], dt, z_est, 0, w_z_gps_p);
+//AB---
+inertial_filter_correct(corr_vicon[2], dt, z_est, 0, params.w_xyz_vicon);
+//---AB
 
 		if (!(isfinite(z_est[0]) && isfinite(z_est[1]))) {
 			write_debug_log("BAD ESTIMATE AFTER Z CORRECTION", dt, x_est, y_est, z_est, x_est_prev, y_est_prev, z_est_prev, acc, corr_gps, w_xy_gps_p, w_xy_gps_v);
 			memcpy(z_est, z_est_prev, sizeof(z_est));
-			memset(corr_gps, 0, sizeof(corr_gps));
 			corr_baro = 0;
-
+			memset(corr_gps, 0, sizeof(corr_gps));
+//AB---
+memset(corr_vicon, 0, sizeof(corr_vicon));
+//---AB
 		} else {
 			memcpy(z_est_prev, z_est, sizeof(z_est));
 		}
+
 
 		if (can_estimate_xy) {
 			/* inertial filter prediction for position */
@@ -850,18 +953,47 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 				}
 			}
 
+//AB---
+if (use_vicon) {
+	inertial_filter_correct(corr_vicon[0], dt, x_est, 0, params.w_xyz_vicon);
+	inertial_filter_correct(corr_vicon[1], dt, y_est, 0, params.w_xyz_vicon);
+}
+//---AB
+
 			if (!(isfinite(x_est[0]) && isfinite(x_est[1]) && isfinite(y_est[0]) && isfinite(y_est[1]))) {
 				write_debug_log("BAD ESTIMATE AFTER CORRECTION", dt, x_est, y_est, z_est, x_est_prev, y_est_prev, z_est_prev, acc, corr_gps, w_xy_gps_p, w_xy_gps_v);
 				memcpy(x_est, x_est_prev, sizeof(x_est));
 				memcpy(y_est, y_est_prev, sizeof(y_est));
-				memset(corr_gps, 0, sizeof(corr_gps));
 				memset(corr_flow, 0, sizeof(corr_flow));
-
+				memset(corr_gps, 0, sizeof(corr_gps));
+//AB---
+memset(corr_vicon, 0, sizeof(corr_vicon));
+//---AB
 			} else {
 				memcpy(x_est_prev, x_est, sizeof(x_est));
 				memcpy(y_est_prev, y_est, sizeof(y_est));
 			}
 		}
+
+//AB---
+/* inertial filter correction for yaw attitude */
+if (use_vicon) {
+	float att_prev = att.yaw;
+	att.yaw += params.w_yaw_vicon * corr_vicon_yaw * dt;
+	if (att.yaw > M_PI_F) {
+		att.yaw -= M_TWOPI_F;
+	}
+	if (att.yaw < -M_PI_F) {
+		att.yaw += M_TWOPI_F;
+	}
+
+	if (!isfinite(att.yaw)) {
+		write_debug_log("BAD ESTIMATE AFTER YAW CORRECTION", dt, x_est, y_est, z_est, x_est_prev, y_est_prev, z_est_prev, acc, corr_gps, w_xy_gps_p, w_xy_gps_v);
+		att.yaw = att_prev;
+	}
+}
+//---AB
+
 
 		/* detect land */
 		alt_avg += (- z_est[0] - alt_avg) * dt / params.land_t;
@@ -894,23 +1026,30 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 			}
 		}
 
+
 		if (verbose_mode) {
 			/* print updates rate */
 			if (t > updates_counter_start + updates_counter_len) {
 				float updates_dt = (t - updates_counter_start) * 0.000001f;
-				warnx(
-					"updates rate: accelerometer = %.1f/s, baro = %.1f/s, gps = %.1f/s, attitude = %.1f/s, flow = %.1f/s",
-					accel_updates / updates_dt,
-					baro_updates / updates_dt,
-					gps_updates / updates_dt,
-					attitude_updates / updates_dt,
-					flow_updates / updates_dt);
+//AB---
+warnx(
+	"updates rate: accelerometer = %.1f/s, baro = %.1f/s, gps = %.1f/s, attitude = %.1f/s, flow = %.1f/s, vicon = %.1f/s",
+	accel_updates / updates_dt,
+	baro_updates / updates_dt,
+	gps_updates / updates_dt,
+	attitude_updates / updates_dt,
+	flow_updates / updates_dt,
+	vicon_updates / updates_dt);
+//---AB
 				updates_counter_start = t;
 				accel_updates = 0;
 				baro_updates = 0;
 				gps_updates = 0;
 				attitude_updates = 0;
 				flow_updates = 0;
+//AB---
+vicon_updates = 0;
+//---AB
 			}
 		}
 

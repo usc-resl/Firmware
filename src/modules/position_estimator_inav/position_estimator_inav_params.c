@@ -55,6 +55,10 @@ PARAM_DEFINE_FLOAT(INAV_SONAR_ERR, 0.5f);
 PARAM_DEFINE_FLOAT(INAV_LAND_T, 3.0f);
 PARAM_DEFINE_FLOAT(INAV_LAND_DISP, 0.7f);
 PARAM_DEFINE_FLOAT(INAV_LAND_THR, 0.2f);
+//AB---
+PARAM_DEFINE_FLOAT(INAV_W_XYZ_VICON, 2.0f);
+PARAM_DEFINE_FLOAT(INAV_W_YAW_VICON, 2.0f);
+//---AB
 
 int parameters_init(struct position_estimator_inav_param_handles *h)
 {
@@ -73,6 +77,10 @@ int parameters_init(struct position_estimator_inav_param_handles *h)
 	h->land_t = param_find("INAV_LAND_T");
 	h->land_disp = param_find("INAV_LAND_DISP");
 	h->land_thr = param_find("INAV_LAND_THR");
+//AB---
+h->w_xyz_vicon = param_find("INAV_W_XYZ_VICON");
+h->w_yaw_vicon = param_find("INAV_W_YAW_VICON");
+//---AB
 
 	return OK;
 }
@@ -94,6 +102,10 @@ int parameters_update(const struct position_estimator_inav_param_handles *h, str
 	param_get(h->land_t, &(p->land_t));
 	param_get(h->land_disp, &(p->land_disp));
 	param_get(h->land_thr, &(p->land_thr));
+//AB---
+param_get(h->w_xyz_vicon, &(p->w_xyz_vicon));
+param_get(h->w_yaw_vicon, &(p->w_yaw_vicon));
+//---AB
 
 	return OK;
 }
