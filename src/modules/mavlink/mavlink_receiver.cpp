@@ -351,8 +351,8 @@ MavlinkReceiver::handle_message_vicon_position_estimate(mavlink_message_t *msg)
 
 	vicon_position.timestamp = hrt_absolute_time();
 	vicon_position.x = pos.x;
-	vicon_position.y = pos.y;
-	vicon_position.z = pos.z;
+	vicon_position.y = -pos.y; // convert to NED
+	vicon_position.z = -pos.z; // convert to NED
 
   // vicon data is z down, pixhawk expects z up.
   // rotate 180 degrees around X-axis (roll).
