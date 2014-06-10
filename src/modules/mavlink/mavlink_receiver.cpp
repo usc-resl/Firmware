@@ -361,6 +361,7 @@ MavlinkReceiver::handle_message_vicon_position_estimate(mavlink_message_t *msg)
 	vicon_position.pitch = euler (1);
 	vicon_position.yaw = euler (2);
 
+  vicon_position.valid = true;
 
   mavlink_log_info (_mavlink_fd, "%.7f %.7f %.7f", 
                     vicon_position.roll, vicon_position.pitch, vicon_position.yaw);
