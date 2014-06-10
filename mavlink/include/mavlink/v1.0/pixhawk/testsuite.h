@@ -24,6 +24,63 @@ static void mavlink_test_all(uint8_t system_id, uint8_t component_id, mavlink_me
 #include "../common/testsuite.h"
 
 
+static void mavlink_test_distance_sensor(uint8_t system_id, uint8_t component_id, mavlink_message_t *last_msg)
+{
+	mavlink_message_t msg;
+        uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+        uint16_t i;
+	mavlink_distance_sensor_t packet_in = {
+		963497464,
+	}17443,
+	}17547,
+	}17651,
+	}163,
+	}230,
+	}41,
+	}108,
+	};
+	mavlink_distance_sensor_t packet1, packet2;
+        memset(&packet1, 0, sizeof(packet1));
+        	packet1.time_boot_ms = packet_in.time_boot_ms;
+        	packet1.min_distance = packet_in.min_distance;
+        	packet1.max_distance = packet_in.max_distance;
+        	packet1.current_distance = packet_in.current_distance;
+        	packet1.type = packet_in.type;
+        	packet1.id = packet_in.id;
+        	packet1.orientation = packet_in.orientation;
+        	packet1.covariance = packet_in.covariance;
+        
+        
+
+        memset(&packet2, 0, sizeof(packet2));
+	mavlink_msg_distance_sensor_encode(system_id, component_id, &msg, &packet1);
+	mavlink_msg_distance_sensor_decode(&msg, &packet2);
+        MAVLINK_ASSERT(memcmp(&packet1, &packet2, sizeof(packet1)) == 0);
+
+        memset(&packet2, 0, sizeof(packet2));
+	mavlink_msg_distance_sensor_pack(system_id, component_id, &msg , packet1.time_boot_ms , packet1.min_distance , packet1.max_distance , packet1.current_distance , packet1.type , packet1.id , packet1.orientation , packet1.covariance );
+	mavlink_msg_distance_sensor_decode(&msg, &packet2);
+        MAVLINK_ASSERT(memcmp(&packet1, &packet2, sizeof(packet1)) == 0);
+
+        memset(&packet2, 0, sizeof(packet2));
+	mavlink_msg_distance_sensor_pack_chan(system_id, component_id, MAVLINK_COMM_0, &msg , packet1.time_boot_ms , packet1.min_distance , packet1.max_distance , packet1.current_distance , packet1.type , packet1.id , packet1.orientation , packet1.covariance );
+	mavlink_msg_distance_sensor_decode(&msg, &packet2);
+        MAVLINK_ASSERT(memcmp(&packet1, &packet2, sizeof(packet1)) == 0);
+
+        memset(&packet2, 0, sizeof(packet2));
+        mavlink_msg_to_send_buffer(buffer, &msg);
+        for (i=0; i<mavlink_msg_get_send_buffer_length(&msg); i++) {
+        	comm_send_ch(MAVLINK_COMM_0, buffer[i]);
+        }
+	mavlink_msg_distance_sensor_decode(last_msg, &packet2);
+        MAVLINK_ASSERT(memcmp(&packet1, &packet2, sizeof(packet1)) == 0);
+        
+        memset(&packet2, 0, sizeof(packet2));
+	mavlink_msg_distance_sensor_send(MAVLINK_COMM_1 , packet1.time_boot_ms , packet1.min_distance , packet1.max_distance , packet1.current_distance , packet1.type , packet1.id , packet1.orientation , packet1.covariance );
+	mavlink_msg_distance_sensor_decode(last_msg, &packet2);
+        MAVLINK_ASSERT(memcmp(&packet1, &packet2, sizeof(packet1)) == 0);
+}
+
 static void mavlink_test_set_cam_shutter(uint8_t system_id, uint8_t component_id, mavlink_message_t *last_msg)
 {
 	mavlink_message_t msg;
@@ -969,8 +1026,62 @@ static void mavlink_test_attitude_control(uint8_t system_id, uint8_t component_i
         MAVLINK_ASSERT(memcmp(&packet1, &packet2, sizeof(packet1)) == 0);
 }
 
+static void mavlink_test_offboard_control(uint8_t system_id, uint8_t component_id, mavlink_message_t *last_msg)
+{
+	mavlink_message_t msg;
+        uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+        uint16_t i;
+	mavlink_offboard_control_t packet_in = {
+		93372036854775807ULL,
+	}179.0,
+	}235.0,
+	}291.0,
+	}347.0,
+	}125,
+	};
+	mavlink_offboard_control_t packet1, packet2;
+        memset(&packet1, 0, sizeof(packet1));
+        	packet1.time_usec = packet_in.time_usec;
+        	packet1.p1 = packet_in.p1;
+        	packet1.p2 = packet_in.p2;
+        	packet1.p3 = packet_in.p3;
+        	packet1.p4 = packet_in.p4;
+        	packet1.mode = packet_in.mode;
+        
+        
+
+        memset(&packet2, 0, sizeof(packet2));
+	mavlink_msg_offboard_control_encode(system_id, component_id, &msg, &packet1);
+	mavlink_msg_offboard_control_decode(&msg, &packet2);
+        MAVLINK_ASSERT(memcmp(&packet1, &packet2, sizeof(packet1)) == 0);
+
+        memset(&packet2, 0, sizeof(packet2));
+	mavlink_msg_offboard_control_pack(system_id, component_id, &msg , packet1.time_usec , packet1.mode , packet1.p1 , packet1.p2 , packet1.p3 , packet1.p4 );
+	mavlink_msg_offboard_control_decode(&msg, &packet2);
+        MAVLINK_ASSERT(memcmp(&packet1, &packet2, sizeof(packet1)) == 0);
+
+        memset(&packet2, 0, sizeof(packet2));
+	mavlink_msg_offboard_control_pack_chan(system_id, component_id, MAVLINK_COMM_0, &msg , packet1.time_usec , packet1.mode , packet1.p1 , packet1.p2 , packet1.p3 , packet1.p4 );
+	mavlink_msg_offboard_control_decode(&msg, &packet2);
+        MAVLINK_ASSERT(memcmp(&packet1, &packet2, sizeof(packet1)) == 0);
+
+        memset(&packet2, 0, sizeof(packet2));
+        mavlink_msg_to_send_buffer(buffer, &msg);
+        for (i=0; i<mavlink_msg_get_send_buffer_length(&msg); i++) {
+        	comm_send_ch(MAVLINK_COMM_0, buffer[i]);
+        }
+	mavlink_msg_offboard_control_decode(last_msg, &packet2);
+        MAVLINK_ASSERT(memcmp(&packet1, &packet2, sizeof(packet1)) == 0);
+        
+        memset(&packet2, 0, sizeof(packet2));
+	mavlink_msg_offboard_control_send(MAVLINK_COMM_1 , packet1.time_usec , packet1.mode , packet1.p1 , packet1.p2 , packet1.p3 , packet1.p4 );
+	mavlink_msg_offboard_control_decode(last_msg, &packet2);
+        MAVLINK_ASSERT(memcmp(&packet1, &packet2, sizeof(packet1)) == 0);
+}
+
 static void mavlink_test_pixhawk(uint8_t system_id, uint8_t component_id, mavlink_message_t *last_msg)
 {
+	mavlink_test_distance_sensor(system_id, component_id, last_msg);
 	mavlink_test_set_cam_shutter(system_id, component_id, last_msg);
 	mavlink_test_image_triggered(system_id, component_id, last_msg);
 	mavlink_test_image_trigger_control(system_id, component_id, last_msg);
@@ -988,6 +1099,7 @@ static void mavlink_test_pixhawk(uint8_t system_id, uint8_t component_id, mavlin
 	mavlink_test_point_of_interest_connection(system_id, component_id, last_msg);
 	mavlink_test_brief_feature(system_id, component_id, last_msg);
 	mavlink_test_attitude_control(system_id, component_id, last_msg);
+	mavlink_test_offboard_control(system_id, component_id, last_msg);
 }
 
 #ifdef __cplusplus
