@@ -172,6 +172,10 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 		handle_message_manual_control(msg);
 		break;
 
+    case MAVLINK_MSG_ID_OFFBOARD_CONTROL:
+		handle_message_offboard_control(msg);
+		break;
+
 	default:
 		break;
 	}
@@ -901,6 +905,67 @@ MavlinkReceiver::handle_message_hil_state_quaternion(mavlink_message_t *msg)
 	}
 }
 
+void
+MavlinkReceiver::handle_message_offboard_control (mavlink_message_t *msg)
+{
+  mavlink_offboard_control_t offboard_control_msg;
+  mavlink_msg_offboard_control_decode (msg, &offboard_control_msg);
+
+
+  struct offboard_control_setpoint_s offboard_control_sp;
+  memset(&offboard_control_sp, 0, sizeof(offboard_control_sp));
+
+  enum OFFBOARD_CONTROL_MODE ml_mode = OFFBOARD_CONTROL_MODE_DIRECT;
+  bool ml_armed = false;
+
+  switch (offboard_control_msg.mode) {
+		case 0:
+			break;
+
+		case 1:
+			ml_mode = OFFBOARD_CONTROL_MODE_DIRECT_RATES;
+			ml_armed = true;
+			break;
+
+		case 2:
+			ml_mode = OFFBOARD_CONTROL_MODE_DIRECT_ATTITUDE;
+			ml_armed = true;
+			break;
+
+		case 3:
+			ml_mode = OFFBOARD_CONTROL_MODE_DIRECT_VELOCITY;
+			//ml_armed = true;
+			break;
+
+		case 4:
+			ml_mode = OFFBOARD_CONTROL_MODE_DIRECT_POSITION;
+			break;
+		default:
+			break;
+  }
+
+  offboard_control_sp.p1 = (float)offboard_control_msg.p1;
+  offboard_control_sp.p2 = (float)offboard_control_msg.p2;
+  offboard_control_sp.p3 = (float)offboard_control_msg.p3;
+  offboard_control_sp.p4 = (float)offboard_control_msg.p4;
+
+  if (offboard_control_msg.p4 == 0) {
+    ml_armed = false;
+  }
+
+  offboard_control_sp.armed = ml_armed;
+  offboard_control_sp.mode = ml_mode;
+
+  offboard_control_sp.timestamp = hrt_absolute_time();
+
+  if (_offboard_control_sp_pub < 0) {
+    _offboard_control_sp_pub = orb_advertise(ORB_ID(offboard_control_setpoint), &offboard_control_sp);
+    
+  } else {
+    orb_publish(ORB_ID(offboard_control_setpoint), _offboard_control_sp_pub, &offboard_control_sp);
+  }
+
+}
 
 /**
  * Receive data from UART.
