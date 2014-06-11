@@ -471,9 +471,6 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 					corr_baro = baro_offset - sensor.baro_alt_meter - z_est[0];
 					baro_timestamp = sensor.baro_timestamp;
 
-					//mavlink_log_info(mavlink_fd, "[inav] Output #0: %.3f %.3f %.3f %.3f",
-					//				   baro_offset, sensor.baro_alt_meter, z_est[0], corr_baro);
-
 					baro_updates++;
 				}
 			}
@@ -1044,7 +1041,6 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 			}
 		}
 
-		//mavlink_log_info(mavlink_fd, "[inav] Output #7: %d %d %d", vicon_updates, gps_updates, accel_updates);
 
 		if (verbose_mode) {
 			/* print updates rate */
@@ -1095,14 +1091,10 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 
 			local_pos.timestamp = t;
 
-
 			//mavlink_log_info(mavlink_fd, "[inav] accs: %.3f %.3f %.3f", acc[0], acc[1], acc[2]);
-
 			//mavlink_log_info(mavlink_fd, "[inav] yaws: %.3f %.3f %.3f", att.yaw, vicon.yaw, local_pos.yaw);
-
-			mavlink_log_info(mavlink_fd, "[inav] position: %.2f %.2f %.2f %.2f %.2f %.2f",
-							 local_pos.x, local_pos.y, local_pos.z, local_pos.vx, local_pos.vy, local_pos.vz);
-
+			//mavlink_log_info(mavlink_fd, "[inav] pos: %.2f %.2f %.2f %.2f %.2f %.2f",
+			//				 local_pos.x, local_pos.y, local_pos.z, local_pos.vx, local_pos.vy, local_pos.vz);
 
 			orb_publish(ORB_ID(vehicle_local_position), vehicle_local_position_pub, &local_pos);
 
