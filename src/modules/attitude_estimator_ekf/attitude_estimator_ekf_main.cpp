@@ -62,6 +62,7 @@
 #include <uORB/topics/vehicle_gps_position.h>
 #include <uORB/topics/vehicle_global_position.h>
 #include <uORB/topics/parameter_update.h>
+#include <uORB/topics/vehicle_vicon_position.h>
 #include <drivers/drv_hrt.h>
 
 #include <lib/mathlib/mathlib.h>
@@ -211,6 +212,9 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
 
 	int overloadcounter = 19;
 
+	bool vicon_valid = false;
+
+
 	/* Initialize filter */
 	attitudeKalmanfilter_initialize();
 
@@ -227,6 +231,10 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
 	memset(&att, 0, sizeof(att));
 	struct vehicle_control_mode_s control_mode;
 	memset(&control_mode, 0, sizeof(control_mode));
+//AB---
+	struct vehicle_vicon_position_s vicon;
+	memset(&vicon, 0, sizeof (vicon));
+//---AB
 
 	uint64_t last_data = 0;
 	uint64_t last_measurement = 0;
@@ -261,6 +269,9 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
 
 	/* subscribe to control mode*/
 	int sub_control_mode = orb_subscribe(ORB_ID(vehicle_control_mode));
+
+	/* subscribe to Vicon */
+	int vehicle_vicon_position_sub = orb_subscribe(ORB_ID(vehicle_vicon_position));
 
 	/* advertise attitude */
 	orb_advert_t pub_att = orb_advertise(ORB_ID(vehicle_attitude), &att);
@@ -335,6 +346,14 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
 
 				/* get latest measurements */
 				orb_copy(ORB_ID(sensor_combined), sub_raw, &raw);
+
+				bool vicon_updated;
+				orb_check(vehicle_vicon_position_sub, &vicon_updated);
+				if (vicon_updated) {
+					orb_copy(ORB_ID(vehicle_vicon_position), vehicle_vicon_position_sub, &vicon);
+
+					vicon_valid = vicon.valid;
+				}
 
 				bool gps_updated;
 				orb_check(sub_gps, &gps_updated);
@@ -437,15 +456,41 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
 					z_k[5] = raw.accelerometer_m_s2[2] - acc(2);
 
 					/* update magnetometer measurements */
-					if (sensor_last_timestamp[2] != raw.magnetometer_timestamp && ekf_params.mag_use) {
+					if (vicon_valid) {
 						update_vect[2] = 1;
-						// sensor_update_hz[2] = 1e6f / (raw.timestamp - sensor_last_timestamp[2]);
-						sensor_last_timestamp[2] = raw.magnetometer_timestamp;
-					}
 
-					z_k[6] = raw.magnetometer_ga[0];
-					z_k[7] = raw.magnetometer_ga[1];
-					z_k[8] = raw.magnetometer_ga[2];
+						math::Matrix<3, 3> R_vicon;
+						R_vicon.from_euler(vicon.roll, vicon.pitch, vicon.yaw);
+						R_vicon = R_vicon.inversed();
+
+						/* fake magnetometer readings, feeding in Vicon data */
+						float fake_incl = M_PI_F/3.0f; // [rad], = 60 degrees
+						float raw_mag_fake[3] = {cos(fake_incl), 0.0f, sin(fake_incl)}; // fake magnetic field vector,
+																 	 	 	 	 	    // in earth-fixed Vicon frame (with NED convention: x=N, y=E, z=D)
+
+						float z_mag_fake[3];
+						for (unsigned int i = 0; i < 3; i++) {
+							z_mag_fake[i] = 0.0f;
+							for (unsigned int j = 0; j < 3; j++) {
+								z_mag_fake[i] += R_vicon(i, j) * raw_mag_fake[j];
+							}
+						}
+
+						z_k[6] = z_mag_fake[0]; //raw.magnetometer_ga[0];
+						z_k[7] = z_mag_fake[1]; //raw.magnetometer_ga[1];
+						z_k[8] = z_mag_fake[2]; //raw.magnetometer_ga[2];
+					}
+					else {
+						if (sensor_last_timestamp[2] != raw.magnetometer_timestamp && ekf_params.mag_use) {
+							update_vect[2] = 1;
+							// sensor_update_hz[2] = 1e6f / (raw.timestamp - sensor_last_timestamp[2]);
+							sensor_last_timestamp[2] = raw.magnetometer_timestamp;
+						}
+
+						z_k[6] = raw.magnetometer_ga[0];
+						z_k[7] = raw.magnetometer_ga[1];
+						z_k[8] = raw.magnetometer_ga[2];
+					}
 
 					uint64_t now = hrt_absolute_time();
 					unsigned int time_elapsed = now - last_run;
@@ -469,7 +514,12 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
 						parameters_update(&ekf_param_handles, &ekf_params);
 
 						/* update mag declination rotation matrix */
-						R_decl.from_euler(0.0f, 0.0f, ekf_params.mag_decl);
+						if (vicon_valid) {
+							R_decl.identity();
+						}
+						else {
+							R_decl.from_euler(0.0f, 0.0f, ekf_params.mag_decl);
+						}
 
 						x_aposteriori_k[0] = z_k[0];
 						x_aposteriori_k[1] = z_k[1];
@@ -515,7 +565,12 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
 
 					att.roll = euler[0];
 					att.pitch = euler[1];
-					att.yaw = euler[2] + ekf_params.mag_decl;
+					if (vicon_valid) {
+						att.yaw = euler[2];
+					}
+					else {
+						att.yaw = euler[2] + ekf_params.mag_decl;
+					}
 
 					att.rollspeed = x_aposteriori[0];
 					att.pitchspeed = x_aposteriori[1];
@@ -532,7 +587,6 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
 					memcpy(&att.rate_offsets, &(x_aposteriori[3]), sizeof(att.rate_offsets));
 
 					/* magnetic declination */
-
 					math::Matrix<3, 3> R_body = (&Rot_matrix[0]);
 					R = R_decl * R_body;
 

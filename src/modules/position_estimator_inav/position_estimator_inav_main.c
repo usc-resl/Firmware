@@ -1095,8 +1095,14 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 
 			local_pos.timestamp = t;
 
-			mavlink_log_info(mavlink_fd, "[inav] %.2f %.2f %.2f %.2f %.2f %.2f %.2f",
-			            	 local_pos.x, local_pos.y, local_pos.z, local_pos.vx, local_pos.vy, local_pos.vz, local_pos.yaw);
+
+			//mavlink_log_info(mavlink_fd, "[inav] accs: %.3f %.3f %.3f", acc[0], acc[1], acc[2]);
+
+			//mavlink_log_info(mavlink_fd, "[inav] yaws: %.3f %.3f %.3f", att.yaw, vicon.yaw, local_pos.yaw);
+
+			mavlink_log_info(mavlink_fd, "[inav] position: %.2f %.2f %.2f %.2f %.2f %.2f",
+							 local_pos.x, local_pos.y, local_pos.z, local_pos.vx, local_pos.vy, local_pos.vz);
+
 
 			orb_publish(ORB_ID(vehicle_local_position), vehicle_local_position_pub, &local_pos);
 
