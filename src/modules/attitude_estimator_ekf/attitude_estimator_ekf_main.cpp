@@ -465,20 +465,14 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
 
 						/* fake magnetometer readings, feeding in Vicon data */
 						float fake_incl = M_PI_F/3.0f; // [rad], = 60 degrees
-						float raw_mag_fake[3] = {cos(fake_incl), 0.0f, sin(fake_incl)}; // fake magnetic field vector,
-																 	 	 	 	 	    // in earth-fixed Vicon frame (with NED convention: x=N, y=E, z=D)
+						math::Vector<3> raw_mag_fake( {cos(fake_incl), 0.0f, sin(fake_incl)} ); // fake magnetic field vector,
+																 	 	 	 	 	    		// in earth-fixed Vicon frame (with NED convention: x=N, y=E, z=D)
 
-						float z_mag_fake[3];
-						for (unsigned int i = 0; i < 3; i++) {
-							z_mag_fake[i] = 0.0f;
-							for (unsigned int j = 0; j < 3; j++) {
-								z_mag_fake[i] += R_vicon(i, j) * raw_mag_fake[j];
-							}
-						}
+						math::Vector<3> z_mag_fake = R_vicon * raw_mag_fake;
 
-						z_k[6] = z_mag_fake[0]; //raw.magnetometer_ga[0];
-						z_k[7] = z_mag_fake[1]; //raw.magnetometer_ga[1];
-						z_k[8] = z_mag_fake[2]; //raw.magnetometer_ga[2];
+						z_k[6] = z_mag_fake(0); //raw.magnetometer_ga[0];
+						z_k[7] = z_mag_fake(1); //raw.magnetometer_ga[1];
+						z_k[8] = z_mag_fake(2); //raw.magnetometer_ga[2];
 					}
 					else {
 						if (sensor_last_timestamp[2] != raw.magnetometer_timestamp && ekf_params.mag_use) {

@@ -358,7 +358,7 @@ MavlinkReceiver::handle_message_vicon_position_estimate(mavlink_message_t *msg)
   // rotate 180 degrees around X-axis (roll).
   math::Matrix<3, 3> vicon_r;
   vicon_r.from_euler (pos.roll, pos.pitch, pos.yaw);
-  vicon_r = vicon_r * _post_rot_vicon;
+  vicon_r = _post_rot_vicon * vicon_r;
   math::Vector<3> euler = vicon_r.to_euler ();
 
 	vicon_position.roll = euler (0) - M_PI;
