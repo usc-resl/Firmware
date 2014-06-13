@@ -117,6 +117,7 @@ private:
 	int 	_manual_sub;			/**< notification of manual control updates */
 	int		_arming_sub;			/**< arming status of outputs */
 	int		_local_pos_sub;			/**< vehicle local position */
+	int 	_local_pos_sp_sub;		/**< vehicle local position setpoint */
 	int		_pos_sp_triplet_sub;		/**< position setpoint triplet */
 
 	orb_advert_t	_att_sp_pub;			/**< attitude setpoint publication */
@@ -255,6 +256,7 @@ MulticopterPositionControl::MulticopterPositionControl() :
 	_manual_sub(-1),
 	_arming_sub(-1),
 	_local_pos_sub(-1),
+	_local_pos_sp_sub(-1),
 	_pos_sp_triplet_sub(-1),
 
 /* publications */
@@ -439,6 +441,12 @@ MulticopterPositionControl::poll_subscriptions()
 	if (updated) {
 		orb_copy(ORB_ID(vehicle_local_position), _local_pos_sub, &_local_pos);
 	}
+	
+	orb_check(_local_pos_sp_sub, &updated);
+
+	if (updated) {
+		orb_copy(ORB_ID(vehicle_local_position_setpoint), _local_pos_sp_sub, &_local_pos_sp);
+	}
 }
 
 float
@@ -527,6 +535,7 @@ MulticopterPositionControl::task_main()
 	_manual_sub = orb_subscribe(ORB_ID(manual_control_setpoint));
 	_arming_sub = orb_subscribe(ORB_ID(actuator_armed));
 	_local_pos_sub = orb_subscribe(ORB_ID(vehicle_local_position));
+	_local_pos_sp_sub = orb_subscribe(ORB_ID(vehicle_local_position_setpoint));
 	_pos_sp_triplet_sub = orb_subscribe(ORB_ID(position_setpoint_triplet));
 
 	parameters_update(true);
@@ -664,6 +673,28 @@ MulticopterPositionControl::task_main()
 					_pos_sp = _pos + pos_sp_offs.emult(_params.sp_offs_max);
 				}
 
+			} else if (_control_mode.flag_control_position_enabled) {
+				/* Auto control using a given local position setpoint */
+				mavlink_log_info(_mavlink_fd, "[mpc] Inside the local sp mode");
+				
+				bool updated;
+				orb_check(_local_pos_sp_sub, &updated);
+
+				if (updated) {
+					orb_copy(ORB_ID(vehicle_local_position_setpoint), _local_pos_sp_sub, &_local_pos_sp);
+				}
+				
+				mavlink_log_info(_mavlink_fd, "[mpc] local pos sp: %.2f, %.2f, %.2f", (double)_local_pos_sp.x, (double)_local_pos_sp.y, (double)_local_pos_sp.z);
+				
+				_pos_sp(0) = _local_pos_sp.x;
+				_pos_sp(1) = _local_pos_sp.y;
+				_pos_sp(2) = _local_pos_sp.z;
+				
+				/* update yaw setpoint if needed */
+				if (isfinite(_local_pos_sp.yaw)) {
+					_att_sp.yaw_body = _local_pos_sp.yaw;
+				}
+				
 			} else {
 				/* AUTO */
 				bool updated;
