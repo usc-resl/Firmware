@@ -67,6 +67,7 @@
 #include <uORB/topics/position_setpoint_triplet.h>
 #include <uORB/topics/vehicle_global_velocity_setpoint.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
+#include <uORB/topics/offboard_control_setpoint.h>
 #include <systemlib/param/param.h>
 #include <systemlib/err.h>
 #include <systemlib/systemlib.h>
@@ -117,8 +118,8 @@ private:
 	int 	_manual_sub;			/**< notification of manual control updates */
 	int		_arming_sub;			/**< arming status of outputs */
 	int		_local_pos_sub;			/**< vehicle local position */
-	int 	_local_pos_sp_sub;		/**< vehicle local position setpoint */
 	int		_pos_sp_triplet_sub;		/**< position setpoint triplet */
+	int 	_offboard_control_sp_sub;		/**< offboard control setpoint */
 
 	orb_advert_t	_att_sp_pub;			/**< attitude setpoint publication */
 	orb_advert_t	_local_pos_sp_pub;		/**< vehicle local position setpoint publication */
@@ -133,6 +134,7 @@ private:
 	struct position_setpoint_triplet_s		_pos_sp_triplet;	/**< vehicle global position setpoint triplet */
 	struct vehicle_local_position_setpoint_s	_local_pos_sp;		/**< vehicle local position setpoint */
 	struct vehicle_global_velocity_setpoint_s	_global_vel_sp;	/**< vehicle global velocity setpoint */
+	struct offboard_control_setpoint_s	_offboard_control_sp;		/**< offboard control setpoint */
 
 	struct {
 		param_t thr_min;
@@ -256,8 +258,8 @@ MulticopterPositionControl::MulticopterPositionControl() :
 	_manual_sub(-1),
 	_arming_sub(-1),
 	_local_pos_sub(-1),
-	_local_pos_sp_sub(-1),
 	_pos_sp_triplet_sub(-1),
+	_offboard_control_sp_sub(-1),
 
 /* publications */
 	_att_sp_pub(-1),
@@ -442,10 +444,10 @@ MulticopterPositionControl::poll_subscriptions()
 		orb_copy(ORB_ID(vehicle_local_position), _local_pos_sub, &_local_pos);
 	}
 	
-	orb_check(_local_pos_sp_sub, &updated);
+	orb_check(_offboard_control_sp_sub, &updated);
 
 	if (updated) {
-		orb_copy(ORB_ID(vehicle_local_position_setpoint), _local_pos_sp_sub, &_local_pos_sp);
+		orb_copy(ORB_ID(offboard_control_setpoint), _offboard_control_sp_sub, &_offboard_control_sp);
 	}
 }
 
@@ -535,8 +537,8 @@ MulticopterPositionControl::task_main()
 	_manual_sub = orb_subscribe(ORB_ID(manual_control_setpoint));
 	_arming_sub = orb_subscribe(ORB_ID(actuator_armed));
 	_local_pos_sub = orb_subscribe(ORB_ID(vehicle_local_position));
-	_local_pos_sp_sub = orb_subscribe(ORB_ID(vehicle_local_position_setpoint));
 	_pos_sp_triplet_sub = orb_subscribe(ORB_ID(position_setpoint_triplet));
+	_offboard_control_sp_sub = orb_subscribe(ORB_ID(offboard_control_setpoint));
 
 	parameters_update(true);
 
@@ -602,6 +604,13 @@ MulticopterPositionControl::task_main()
 		was_armed = _control_mode.flag_armed;
 
 		update_ref();
+		//mavlink_log_info(_mavlink_fd, "[mpc] altitude, position, climb, velocity %d %d %d %d", (int)_control_mode.flag_control_altitude_enabled, (int)_control_mode.flag_control_position_enabled,
+			//	(int)_control_mode.flag_control_climb_rate_enabled, (int)_control_mode.flag_control_velocity_enabled);
+		//mavlink_log_info(_mavlink_fd, "[mpc] position %d", (int)_control_mode.flag_control_altitude_enabled);
+		//mavlink_log_info(_mavlink_fd, "[mpc] altitude %d", (int)_control_mode.flag_control_altitude_enabled);
+		//mavlink_log_info(_mavlink_fd, "[mpc] altitude %d", (int)_control_mode.flag_control_altitude_enabled);
+		
+		//mavlink_log_info(_mavlink_fd, "[mpc] attitude, rates %d %d", (int)_control_mode.flag_control_rates_enabled, (int)_control_mode.flag_control_attitude_enabled);
 
 		if (_control_mode.flag_control_altitude_enabled ||
 		    _control_mode.flag_control_position_enabled ||
@@ -617,10 +626,14 @@ MulticopterPositionControl::task_main()
 			_vel(2) = _local_pos.vz;
 
 			sp_move_rate.zero();
+			
+			//mavlink_log_info(_mavlink_fd, "[mpc] inside control loop mode");
 
 			/* select control source */
 			if (_control_mode.flag_control_manual_enabled) {
 				/* manual control */
+				
+				
 				if (_control_mode.flag_control_altitude_enabled) {
 					/* reset alt setpoint to current altitude if needed */
 					reset_alt_sp();
@@ -673,26 +686,27 @@ MulticopterPositionControl::task_main()
 					_pos_sp = _pos + pos_sp_offs.emult(_params.sp_offs_max);
 				}
 
-			} else if (_control_mode.flag_control_position_enabled) {
-				/* Auto control using a given local position setpoint */
-				mavlink_log_info(_mavlink_fd, "[mpc] Inside the local sp mode");
+			} else if (_control_mode.flag_control_offboard_enabled) {
+				/* Auto control using an offboard position setpoint */
+				//mavlink_log_info(_mavlink_fd, "[mpc] Inside the offboard sp mode");
 				
 				bool updated;
-				orb_check(_local_pos_sp_sub, &updated);
+				orb_check(_offboard_control_sp_sub, &updated);
 
 				if (updated) {
-					orb_copy(ORB_ID(vehicle_local_position_setpoint), _local_pos_sp_sub, &_local_pos_sp);
+					orb_copy(ORB_ID(offboard_control_setpoint), _offboard_control_sp_sub, &_offboard_control_sp);
 				}
 				
-				mavlink_log_info(_mavlink_fd, "[mpc] local pos sp: %.2f, %.2f, %.2f", (double)_local_pos_sp.x, (double)_local_pos_sp.y, (double)_local_pos_sp.z);
+				//mavlink_log_info(_mavlink_fd, "[mpc] offboard pos sp: %.2f, %.2f, %.2f, yaw = %.2f", 
+					//	(double)_offboard_control_sp.p1, (double)_offboard_control_sp.p2, (double)_offboard_control_sp.p4, (double)_offboard_control_sp.p3);
 				
-				_pos_sp(0) = _local_pos_sp.x;
-				_pos_sp(1) = _local_pos_sp.y;
-				_pos_sp(2) = _local_pos_sp.z;
+				_pos_sp(0) = _offboard_control_sp.p1;
+				_pos_sp(1) = _offboard_control_sp.p2;
+				_pos_sp(2) = _offboard_control_sp.p4;
 				
 				/* update yaw setpoint if needed */
 				if (isfinite(_local_pos_sp.yaw)) {
-					_att_sp.yaw_body = _local_pos_sp.yaw;
+					_att_sp.yaw_body = _offboard_control_sp.p3;
 				}
 				
 			} else {
@@ -778,6 +792,8 @@ MulticopterPositionControl::task_main()
 					_vel_sp(0) = 0.0f;
 					_vel_sp(1) = 0.0f;
 				}
+				
+				//mavlink_log_info(_mavlink_fd, "[mpc] vel sp: %.2f, %.2f, %.2f", (double)_vel_sp(0), (double)_vel_sp(1), (double)_vel_sp(2));
 
 				/* use constant descend rate when landing, ignore altitude setpoint */
 				if (!_control_mode.flag_control_manual_enabled && _pos_sp_triplet.current.valid && _pos_sp_triplet.current.type == SETPOINT_TYPE_LAND) {
@@ -793,6 +809,8 @@ MulticopterPositionControl::task_main()
 					}
 				}
 
+				mavlink_log_info(_mavlink_fd, "[mpc] normalized vel sp: %.2f, %.2f, %.2f", (double)_vel_sp(0), (double)_vel_sp(1), (double)_vel_sp(2));
+				
 				_global_vel_sp.vx = _vel_sp(0);
 				_global_vel_sp.vy = _vel_sp(1);
 				_global_vel_sp.vz = _vel_sp(2);
@@ -978,6 +996,8 @@ MulticopterPositionControl::task_main()
 						}
 					}
 
+					mavlink_log_info(_mavlink_fd, "[mpc] thrust_int: %.2f, %.2f, %.2f", (double)thrust_int(0), (double)thrust_int(1), (double)thrust_int(2));
+					
 					/* calculate attitude setpoint from thrust vector */
 					if (_control_mode.flag_control_velocity_enabled) {
 						/* desired body_z axis = -normalize(thrust_vector) */
@@ -1034,6 +1054,9 @@ MulticopterPositionControl::task_main()
 						_att_sp.roll_body = euler(0);
 						_att_sp.pitch_body = euler(1);
 						/* yaw already used to construct rot matrix, but actual rotation matrix can have different yaw near singularity */
+						
+						mavlink_log_info(_mavlink_fd, "[mpc] att sp: %.2f, %.2f, %.2f", 
+								(double)_att_sp.roll_body, (double)_att_sp.pitch_body, (double)_att_sp.yaw_body);
 
 					} else if (!_control_mode.flag_control_manual_enabled) {
 						/* autonomous altitude control without position control (failsafe landing),
