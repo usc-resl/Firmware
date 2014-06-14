@@ -49,15 +49,15 @@
  * Typically sent by a ground control station / joystick or by
  * some off-board controller via C or SIMULINK.
  */
-enum OFFBOARD_CONTROL_MODE {
-	OFFBOARD_CONTROL_MODE_DIRECT = 0,
-	OFFBOARD_CONTROL_MODE_DIRECT_RATES = 1,
-	OFFBOARD_CONTROL_MODE_DIRECT_ATTITUDE = 2,
-	OFFBOARD_CONTROL_MODE_DIRECT_VELOCITY = 3,
-	OFFBOARD_CONTROL_MODE_DIRECT_POSITION = 4,
+enum OFFBOARD_CONTROL_MODE { // meaning of [p1, p2, p3, p4]
+	OFFBOARD_CONTROL_MODE_DIRECT = 0, //!< individual motor values?
+	OFFBOARD_CONTROL_MODE_DIRECT_RATES = 1, //!< [roll-velocity, pitch-velocity, yaw-velocity, thrust]
+	OFFBOARD_CONTROL_MODE_DIRECT_ATTITUDE = 2, //!< [roll, pitch, yaw-velocity, thrust]
+	OFFBOARD_CONTROL_MODE_DIRECT_VELOCITY = 3, //!< [x-velocity, y-velocity, yaw-velocity, z-velocity]
+	OFFBOARD_CONTROL_MODE_DIRECT_POSITION = 4, //!< [x, y, yaw, z]
 	OFFBOARD_CONTROL_MODE_ATT_YAW_RATE = 5,
 	OFFBOARD_CONTROL_MODE_ATT_YAW_POS = 6,
-	OFFBOARD_CONTROL_MODE_MULTIROTOR_SIMPLE = 7, /**< roll / pitch rotated aligned to the takeoff orientation, throttle stabilized, yaw pos */
+	OFFBOARD_CONTROL_MODE_MULTIROTOR_SIMPLE = 7, //!< roll / pitch rotated aligned to the takeoff orientation, throttle stabilized, yaw pos
 };
 
 /**

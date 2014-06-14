@@ -934,11 +934,12 @@ MavlinkReceiver::handle_message_offboard_control (mavlink_message_t *msg)
 
 		case 3:
 			ml_mode = OFFBOARD_CONTROL_MODE_DIRECT_VELOCITY;
-			//ml_armed = true;
+			ml_armed = true;
 			break;
 
 		case 4:
 			ml_mode = OFFBOARD_CONTROL_MODE_DIRECT_POSITION;
+			ml_armed = true;
 			break;
 		default:
 			break;
