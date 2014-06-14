@@ -1491,6 +1491,7 @@ int commander_thread_main(int argc, char *argv[])
 		/* publish states (armed, control mode, vehicle status) at least with 5 Hz */
 		if (counter % (200000 / COMMANDER_MONITORING_INTERVAL) == 0 || status_changed) {
 			set_control_mode();
+			//mavlink_log_info(mavlink_fd, "control rates %d att %d vel %d climb %d pos %d alt %d", (int)control_mode.flag_control_rates_enabled, (int)control_mode.flag_control_attitude_enabled, (int)control_mode.flag_control_velocity_enabled, (int)control_mode.flag_control_climb_rate_enabled, (int)control_mode.flag_control_position_enabled, (int)control_mode.flag_control_altitude_enabled);
 			control_mode.timestamp = t1;
 			orb_publish(ORB_ID(vehicle_control_mode), control_mode_pub, &control_mode);
 
@@ -1825,6 +1826,7 @@ set_control_mode()
 				control_mode.flag_control_climb_rate_enabled = true;
 				control_mode.flag_control_position_enabled = true;
 				control_mode.flag_control_velocity_enabled = true;
+				break;
 			default:
 				control_mode.flag_control_rates_enabled = false;
 				control_mode.flag_control_attitude_enabled = false;
