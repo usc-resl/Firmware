@@ -913,21 +913,24 @@ MavlinkReceiver::handle_message_offboard_control (mavlink_message_t *msg)
 
 		case 1:
 			ml_mode = OFFBOARD_CONTROL_MODE_DIRECT_RATES;
-			ml_armed = true;
+			if (offboard_control_msg.p4 > 0)
+				ml_armed = true;
 			break;
 
 		case 2:
 			ml_mode = OFFBOARD_CONTROL_MODE_DIRECT_ATTITUDE;
-			ml_armed = true;
+			if (offboard_control_msg.p4 > 0)
+				ml_armed = true;
 			break;
 
 		case 3:
 			ml_mode = OFFBOARD_CONTROL_MODE_DIRECT_VELOCITY;
-			//ml_armed = true;
+			ml_armed = true;
 			break;
 
 		case 4:
 			ml_mode = OFFBOARD_CONTROL_MODE_DIRECT_POSITION;
+			ml_armed = true;
 			break;
 		default:
 			break;
@@ -937,10 +940,6 @@ MavlinkReceiver::handle_message_offboard_control (mavlink_message_t *msg)
   offboard_control_sp.p2 = (float)offboard_control_msg.p2;
   offboard_control_sp.p3 = (float)offboard_control_msg.p3;
   offboard_control_sp.p4 = (float)offboard_control_msg.p4;
-
-  if (offboard_control_msg.p4 == 0) {
-    ml_armed = false;
-  }
 
   offboard_control_sp.armed = ml_armed;
   offboard_control_sp.mode = ml_mode;
