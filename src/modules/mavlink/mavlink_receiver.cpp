@@ -65,7 +65,6 @@
 #include <poll.h>
 
 #include <mathlib/mathlib.h>
-#include <conversion/rotation.h>
 
 #include <systemlib/param/param.h>
 #include <systemlib/systemlib.h>
@@ -121,9 +120,6 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 	_control_mode_sub = orb_subscribe(ORB_ID(vehicle_control_mode));
 	memset(&hil_local_pos, 0, sizeof(hil_local_pos));
 	memset(&_control_mode, 0, sizeof(_control_mode));
-
-  // post rotation matrix for vicon data ROLL by PI
-  get_rot_matrix (ROTATION_ROLL_180, &_post_rot_vicon);
 
   _mavlink_fd = open (MAVLINK_LOG_DEVICE, 0);
 }
