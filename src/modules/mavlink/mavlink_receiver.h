@@ -155,8 +155,6 @@ private:
 	float _hil_local_alt0;
 	struct map_projection_reference_s _hil_local_proj_ref;
 
-    // post rotation matrix for vicon data (rotate ROLL by PI)
-    math::Matrix<3, 3> _post_rot_vicon;
     int _mavlink_fd;
     
 };
