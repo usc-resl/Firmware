@@ -79,6 +79,7 @@ static int position_estimator_inav_task; /**< Handle of deamon task / thread */
 static bool verbose_mode = false;
 
 static const hrt_abstime vicon_topic_timeout = 1000000; // Vicon topic timeout = 1s
+static const hrt_abstime vicon_timeout = 1000000; // Vicon timeout = 1s
 static const hrt_abstime gps_topic_timeout = 1000000;		// GPS topic timeout = 1s
 static const hrt_abstime flow_topic_timeout = 1000000;	// optical flow topic timeout = 1s
 static const hrt_abstime sonar_timeout = 150000;	// sonar timeout = 150ms
@@ -290,6 +291,7 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 	hrt_abstime sonar_time = 0;			// time of last sonar measurement (not filtered)
 	hrt_abstime sonar_valid_time = 0;	// time of last sonar measurement used for correction (filtered)
 	hrt_abstime xy_src_time = 0;		// time of last available position data
+	hrt_abstime vicon_time = 0;			// time of last vicon measurement
 
 	bool gps_valid = false;			// GPS is valid
 	bool sonar_valid = false;		// sonar is valid
@@ -727,6 +729,11 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 			if (updated) {
 				orb_copy(ORB_ID(vehicle_vicon_position), vehicle_vicon_position_sub, &vicon);
 
+				// Check for Vicon outage
+				if (t > vicon_time + vicon_timeout) {
+					vicon_inited = false;
+				}
+
 				vicon_valid = vicon.valid;
 
 				if (vicon_valid) {
@@ -754,6 +761,7 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 					}
 
 					eph = fminf(eph, 0.1);	// for Vicon, assume EPH = 10 cm
+					vicon_time = t; // update Vicon time
 				}
 				else {
 					/* no Vicon data */
@@ -791,6 +799,7 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 		//TODO: requires sync of different times (ROS time, PX4 time, etc.)
 		//if (vicon_valid && t > vicon.timestamp + vicon_topic_timeout) {
 		//	vicon_valid = false;
+		//  vicon_inited = false;
 		//	warnx("Vicon timeout");
 		//	mavlink_log_info(mavlink_fd, "[inav] Vicon timeout");
 		//}
