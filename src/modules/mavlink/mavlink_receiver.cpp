@@ -65,7 +65,6 @@
 #include <poll.h>
 
 #include <mathlib/mathlib.h>
-#include <conversion/rotation.h>
 
 #include <systemlib/param/param.h>
 #include <systemlib/systemlib.h>
@@ -121,9 +120,6 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 	_control_mode_sub = orb_subscribe(ORB_ID(vehicle_control_mode));
 	memset(&hil_local_pos, 0, sizeof(hil_local_pos));
 	memset(&_control_mode, 0, sizeof(_control_mode));
-
-  // post rotation matrix for vicon data ROLL by PI
-  get_rot_matrix (ROTATION_ROLL_180, &_post_rot_vicon);
 
   _mavlink_fd = open (MAVLINK_LOG_DEVICE, 0);
 }
@@ -351,19 +347,11 @@ MavlinkReceiver::handle_message_vicon_position_estimate(mavlink_message_t *msg)
 
 	vicon_position.timestamp = hrt_absolute_time();
 	vicon_position.x = pos.x;
-	vicon_position.y = -pos.y; // convert to NED
-	vicon_position.z = -pos.z; // convert to NED
-
-  // vicon data is z down, pixhawk expects z up.
-  // rotate 180 degrees around X-axis (roll).
-  math::Matrix<3, 3> vicon_r;
-  vicon_r.from_euler (pos.roll, pos.pitch, pos.yaw);
-  vicon_r = _post_rot_vicon * vicon_r;
-  math::Vector<3> euler = vicon_r.to_euler ();
-
-	vicon_position.roll = euler (0) - M_PI;
-	vicon_position.pitch = euler (1);
-	vicon_position.yaw = euler (2);
+	vicon_position.y = -pos.y; // -> conversion from Vicon to NED frame: swap sign
+	vicon_position.z = -pos.z; // -> conversion from Vicon to NED frame: swap sign
+	vicon_position.roll = pos.roll;
+	vicon_position.pitch = -pos.pitch; // -> conversion from Vicon to NED frame: swap sign
+	vicon_position.yaw = -pos.yaw; // -> conversion from Vicon to NED frame: swap sign
 
   vicon_position.valid = true;
 
@@ -371,9 +359,6 @@ MavlinkReceiver::handle_message_vicon_position_estimate(mavlink_message_t *msg)
                     vicon_position.x, vicon_position.y, vicon_position.z, 
                     vicon_position.roll, vicon_position.pitch, vicon_position.yaw);
   
-
-
-
 	if (_vicon_position_pub < 0) {
 		_vicon_position_pub = orb_advertise(ORB_ID(vehicle_vicon_position), &vicon_position);
 
