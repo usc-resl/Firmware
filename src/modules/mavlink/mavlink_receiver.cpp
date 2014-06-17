@@ -355,9 +355,9 @@ MavlinkReceiver::handle_message_vicon_position_estimate(mavlink_message_t *msg)
 
   vicon_position.valid = true;
 
-  mavlink_log_info (_mavlink_fd, "%.3f %.3f %.3f %.3f %.3f %.3f",
-                    vicon_position.x, vicon_position.y, vicon_position.z, 
-                    vicon_position.roll, vicon_position.pitch, vicon_position.yaw);
+  /* mavlink_log_info (_mavlink_fd, "%.3f %.3f %.3f %.3f %.3f %.3f",
+   *                   vicon_position.x, vicon_position.y, vicon_position.z, 
+   *                   vicon_position.roll, vicon_position.pitch, vicon_position.yaw); */
   
 	if (_vicon_position_pub < 0) {
 		_vicon_position_pub = orb_advertise(ORB_ID(vehicle_vicon_position), &vicon_position);
@@ -915,6 +915,12 @@ MavlinkReceiver::handle_message_offboard_control (mavlink_message_t *msg)
 
 		case 2:
 			ml_mode = OFFBOARD_CONTROL_MODE_DIRECT_ATTITUDE;
+
+      offboard_control_sp.p1 = (-1) * (float)offboard_control_msg.p1;
+      offboard_control_sp.p2 = (float)offboard_control_msg.p2;
+      offboard_control_sp.p3 = (-1) * (float)offboard_control_msg.p3;
+      offboard_control_sp.p4 = (float)offboard_control_msg.p4;
+
 			if (offboard_control_msg.p4 > 0)
 				ml_armed = true;
 			break;
@@ -926,16 +932,17 @@ MavlinkReceiver::handle_message_offboard_control (mavlink_message_t *msg)
 
 		case 4:
 			ml_mode = OFFBOARD_CONTROL_MODE_DIRECT_POSITION;
+
+      offboard_control_sp.p1 = (float)offboard_control_msg.p1;
+      offboard_control_sp.p2 = (-1) * (float)offboard_control_msg.p2;
+      offboard_control_sp.p3 = (-1) * (float)offboard_control_msg.p3;
+      offboard_control_sp.p4 = (-1) * (float)offboard_control_msg.p4;
+
 			ml_armed = true;
 			break;
 		default:
 			break;
   }
-
-  offboard_control_sp.p1 = (float)offboard_control_msg.p1;
-  offboard_control_sp.p2 = (float)offboard_control_msg.p2;
-  offboard_control_sp.p3 = (float)offboard_control_msg.p3;
-  offboard_control_sp.p4 = (float)offboard_control_msg.p4;
 
   offboard_control_sp.armed = ml_armed;
   offboard_control_sp.mode = ml_mode;
