@@ -155,6 +155,9 @@ private:
 	float _hil_local_alt0;
 	struct map_projection_reference_s _hil_local_proj_ref;
 
+    // >>> DEBUG
     int _mavlink_fd;
+    uint64_t last_vicon_update_;
     
+
 };

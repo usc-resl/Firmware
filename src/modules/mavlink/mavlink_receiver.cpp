@@ -114,8 +114,6 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 	_hil_local_proj_inited(0),
 	_hil_local_alt0(0.0)
 
-
-
 {
 	_control_mode_sub = orb_subscribe(ORB_ID(vehicle_control_mode));
 	memset(&hil_local_pos, 0, sizeof(hil_local_pos));
@@ -345,6 +343,12 @@ MavlinkReceiver::handle_message_vicon_position_estimate(mavlink_message_t *msg)
 	struct vehicle_vicon_position_s vicon_position;
 	memset(&vicon_position, 0, sizeof(vicon_position));
 
+  /* uint64_t dt = ((float) hrt_elapsed_time ( &last_vicon_update_));
+   * last_vicon_update_ = hrt_absolute_time();
+   * 
+   * mavlink_log_info (_mavlink_fd, "> ERROR: %llu ", dt); */
+
+
 	vicon_position.timestamp = hrt_absolute_time();
 	vicon_position.x = pos.x;
 	vicon_position.y = -pos.y; // -> conversion from Vicon to NED frame: swap sign
@@ -354,6 +358,9 @@ MavlinkReceiver::handle_message_vicon_position_estimate(mavlink_message_t *msg)
 	vicon_position.yaw = -pos.yaw; // -> conversion from Vicon to NED frame: swap sign
 
   vicon_position.valid = true;
+
+
+
 
   /* mavlink_log_info (_mavlink_fd, "%.3f %.3f %.3f %.3f %.3f %.3f",
    *                   vicon_position.x, vicon_position.y, vicon_position.z, 
@@ -365,6 +372,9 @@ MavlinkReceiver::handle_message_vicon_position_estimate(mavlink_message_t *msg)
 	} else {
 		orb_publish(ORB_ID(vehicle_vicon_position), _vicon_position_pub, &vicon_position);
 	}
+
+
+  
 }
 
 void
@@ -902,6 +912,18 @@ MavlinkReceiver::handle_message_offboard_control (mavlink_message_t *msg)
 
   enum OFFBOARD_CONTROL_MODE ml_mode = OFFBOARD_CONTROL_MODE_DIRECT;
   bool ml_armed = false;
+
+  /* uint64_t dt = hrt_elapsed_time ( &last_vicon_update_) ;
+   * last_vicon_update_ = hrt_absolute_time();
+   * 
+   * mavlink_log_info (_mavlink_fd, "> ERROR: %llu ", dt); */
+
+  /* mavlink_log_info (_mavlink_fd, "%.3f %.3f %.3f %.3f",
+   *                   offboard_control_msg.p1,
+   *                   offboard_control_msg.p2,
+   *                   offboard_control_msg.p3,
+   *                   offboard_control_msg.p4); */
+  
 
   switch (offboard_control_msg.mode) {
 		case 0:

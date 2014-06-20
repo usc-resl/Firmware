@@ -996,7 +996,7 @@ MulticopterPositionControl::task_main()
 						}
 					}
 
-					mavlink_log_info(_mavlink_fd, "[mpc] thrust_int: %.2f, %.2f, %.2f", (double)thrust_int(0), (double)thrust_int(1), (double)thrust_int(2));
+					//mavlink_log_info(_mavlink_fd, "[mpc] thrust_int: %.2f, %.2f, %.2f", (double)thrust_int(0), (double)thrust_int(1), (double)thrust_int(2));
 					
 					/* calculate attitude setpoint from thrust vector */
 					if (_control_mode.flag_control_velocity_enabled) {
@@ -1055,8 +1055,8 @@ MulticopterPositionControl::task_main()
 						_att_sp.pitch_body = euler(1);
 						/* yaw already used to construct rot matrix, but actual rotation matrix can have different yaw near singularity */
 						
-						mavlink_log_info(_mavlink_fd, "[mpc] att sp: %.2f, %.2f, %.2f", 
-								(double)_att_sp.roll_body, (double)_att_sp.pitch_body, (double)_att_sp.yaw_body);
+						/* mavlink_log_info(_mavlink_fd, "[mpc] att sp: %.2f, %.2f, %.2f", 
+						 * 		(double)_att_sp.roll_body, (double)_att_sp.pitch_body, (double)_att_sp.yaw_body); */
 
 					} else if (!_control_mode.flag_control_manual_enabled) {
 						/* autonomous altitude control without position control (failsafe landing),
