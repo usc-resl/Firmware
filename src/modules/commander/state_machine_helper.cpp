@@ -166,6 +166,11 @@ arming_state_transition(struct vehicle_status_s *status,            /// current 
 			ret = TRANSITION_CHANGED;
 			status->arming_state = new_arming_state;
 			arming_state_changed = true;
+			if (armed->armed) {
+				// reset offboard setpoint
+				status->offboard_control_signal_found_once = false;
+				status->offboard_control_signal_lost = true;
+			}
 		}
 	}
 
@@ -218,6 +223,9 @@ main_state_transition(struct vehicle_status_s *status, main_state_t new_main_sta
 
 	/* transition may be denied even if requested the same state because conditions may be changed */
 	switch (new_main_state) {
+	case MAIN_STATE_IDLE:
+		ret = TRANSITION_CHANGED;
+		break;
 	case MAIN_STATE_MANUAL:
 		ret = TRANSITION_CHANGED;
 		break;
@@ -259,7 +267,7 @@ main_state_transition(struct vehicle_status_s *status, main_state_t new_main_sta
 	case MAIN_STATE_OFFBOARD:
 
 		/* need offboard signal */
-		if (!status->offboard_control_signal_lost) {
+		if (status->offboard_control_signal_found_once) {
 			ret = TRANSITION_CHANGED;
 		}
 

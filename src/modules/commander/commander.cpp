@@ -463,6 +463,8 @@ bool handle_command(struct vehicle_status_s *status, const struct safety_s *safe
 				} else if (custom_main_mode == PX4_CUSTOM_MAIN_MODE_OFFBOARD) {
 					/* OFFBOARD */
 					main_res = main_state_transition(status, MAIN_STATE_OFFBOARD);
+				} else if (custom_main_mode == PX4_CUSTOM_MAIN_MODE_IDLE) {
+					main_res = main_state_transition(status, MAIN_STATE_IDLE);
 				}
 
 			} else {
@@ -664,6 +666,7 @@ int commander_thread_main(int argc, char *argv[])
 	main_states_str[3] = "AUTO";
 	main_states_str[4] = "ACRO";
 	main_states_str[5] = "OFFBOARD";
+	main_states_str[6] = "IDLE";
 
 	char *arming_states_str[ARMING_STATE_MAX];
 	arming_states_str[0] = "INIT";
@@ -699,7 +702,7 @@ int commander_thread_main(int argc, char *argv[])
 	status.condition_landed = true;	// initialize to safe value
 	// We want to accept RC inputs as default
 	status.rc_input_blocked = false;
-	status.main_state = MAIN_STATE_MANUAL;
+	status.main_state = MAIN_STATE_IDLE;
 	status.set_nav_state = NAV_STATE_NONE;
 	status.set_nav_state_timestamp = 0;
 	status.arming_state = ARMING_STATE_INIT;
@@ -1203,6 +1206,10 @@ int commander_thread_main(int argc, char *argv[])
 				if (status.rc_signal_lost) {
 					mavlink_log_critical(mavlink_fd, "#audio: RC signal regained");
 					status_changed = true;
+					status.rc_signal_lost = false;
+					if (status.main_state == MAIN_STATE_IDLE) {
+						main_state_transition(&status, MAIN_STATE_MANUAL);
+					}
 				}
 			}
 
@@ -1316,7 +1323,7 @@ int commander_thread_main(int argc, char *argv[])
 				}
 			}
 
-		} else {
+		} else { // rc signal lost
 			if (!status.rc_signal_lost) {
 				mavlink_log_critical(mavlink_fd, "#audio: CRITICAL: RC SIGNAL LOST");
 				status.rc_signal_lost = true;
@@ -1346,7 +1353,7 @@ int commander_thread_main(int argc, char *argv[])
 				} else if (status.main_state == MAIN_STATE_MANUAL) {
 					/* failsafe for manual modes */
 					transition_result_t manual_res = TRANSITION_DENIED;
-
+#if 0
 					if (!status.condition_landed) {
 						/* vehicle is not landed, try to perform RTL */
 						manual_res = failsafe_state_transition(&status, FAILSAFE_STATE_RTL);
@@ -1361,36 +1368,20 @@ int commander_thread_main(int argc, char *argv[])
 							(void)failsafe_state_transition(&status, FAILSAFE_STATE_TERMINATION);
 						}
 					}
+#endif
+					// we can't safely handle this failure -- go to idle mode (switch motors to minimal speed)
+					manual_res = main_state_transition(&status, MAIN_STATE_IDLE);
 				} else if (status.main_state == MAIN_STATE_OFFBOARD) {
 					transition_result_t offboard_res = TRANSITION_DENIED;
 					/* check if OFFBOARD mode still allowed */
 					offboard_res = main_state_transition(&status, MAIN_STATE_OFFBOARD);
-
-					if (offboard_res == TRANSITION_DENIED) {
-						/* not in OFFBOARD mode or OFFBOARD is not allowed anymore, switch to failsafe */
-						transition_result_t failsafe_res = TRANSITION_DENIED;
-
-						if (!status.condition_landed) {
-							/* vehicle is not landed, try to perform RTL */
-							failsafe_res = failsafe_state_transition(&status, FAILSAFE_STATE_RTL);
-						}
-
-						if (failsafe_res == TRANSITION_DENIED) {
-							/* RTL not allowed (no global position estimate) or not wanted, try LAND */
-							failsafe_res = failsafe_state_transition(&status, FAILSAFE_STATE_LAND);
-
-							if (failsafe_res == TRANSITION_DENIED) {
-								/* LAND not allowed, set TERMINATION state */
-								(void)failsafe_state_transition(&status, FAILSAFE_STATE_TERMINATION);
-							}
-						}
-					}
 				}
 			} else {
 				if (status.failsafe_state != FAILSAFE_STATE_NORMAL) {
 					/* reset failsafe when disarmed */
 					(void)failsafe_state_transition(&status, FAILSAFE_STATE_NORMAL);
 				}
+				main_state_transition(&status, MAIN_STATE_IDLE);
 			}
 		}
 
@@ -1749,6 +1740,17 @@ set_control_mode()
 	switch (status.failsafe_state) {
 	case FAILSAFE_STATE_NORMAL:
 		switch (status.main_state) {
+		case MAIN_STATE_IDLE:
+			control_mode.flag_control_manual_enabled = false;
+			control_mode.flag_control_auto_enabled = false;
+			control_mode.flag_control_rates_enabled = status.is_rotary_wing;
+			control_mode.flag_control_attitude_enabled = status.is_rotary_wing;
+			control_mode.flag_control_altitude_enabled = false;
+			control_mode.flag_control_climb_rate_enabled = false;
+			control_mode.flag_control_position_enabled = false;
+			control_mode.flag_control_velocity_enabled = false;
+		  break;
+
 		case MAIN_STATE_MANUAL:
 			control_mode.flag_control_manual_enabled = true;
 			control_mode.flag_control_auto_enabled = false;

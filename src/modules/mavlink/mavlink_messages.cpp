@@ -143,6 +143,8 @@ void get_mavlink_mode_state(struct vehicle_status_s *status, struct position_set
 
 		} else if (status->main_state == MAIN_STATE_OFFBOARD) {
 			custom_mode.main_mode = PX4_CUSTOM_MAIN_MODE_OFFBOARD;
+		} else if (status->main_state == MAIN_STATE_IDLE) {
+			custom_mode.main_mode = PX4_CUSTOM_MAIN_MODE_IDLE;
 		}
 
 	} else {

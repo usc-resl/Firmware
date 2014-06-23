@@ -174,6 +174,7 @@ private:
 		param_t acro_roll_max;
 		param_t acro_pitch_max;
 		param_t acro_yaw_max;
+		param_t idle_thrust;
 	}		_params_handles;		/**< handles for interesting parameters */
 
 	struct {
@@ -188,6 +189,8 @@ private:
 		float man_pitch_max;
 		float man_yaw_max;
 		math::Vector<3> acro_rate_max;		/**< max attitude rates in acro mode */
+
+		float idle_thrust;
 	}		_params;
 
 
@@ -342,6 +345,7 @@ MulticopterAttitudeControl::MulticopterAttitudeControl() :
 	_params_handles.acro_roll_max	= 	param_find("MC_ACRO_R_MAX");
 	_params_handles.acro_pitch_max	= 	param_find("MC_ACRO_P_MAX");
 	_params_handles.acro_yaw_max		= 	param_find("MC_ACRO_Y_MAX");
+	_params_handles.idle_thrust		= 	param_find("MC_IDLE_THRUST");
 
 	/* fetch initial parameter values */
 	parameters_update();
@@ -425,6 +429,8 @@ MulticopterAttitudeControl::parameters_update()
 	_params.acro_rate_max(1) = math::radians(v);
 	param_get(_params_handles.acro_yaw_max, &v);
 	_params.acro_rate_max(2) = math::radians(v);
+	param_get(_params_handles.idle_thrust, &v);
+	_params.idle_thrust = v;
 
 	return OK;
 }
@@ -647,6 +653,12 @@ MulticopterAttitudeControl::control_attitude(float dt)
 			_v_att_sp.R_valid = false;
 			publish_att_sp = true;
 		}
+	} else if (_v_control_mode.flag_control_idle) {
+		_v_att_sp.roll_body = 0;
+		_v_att_sp.pitch_body = 0;
+		_v_att_sp.yaw_body = _v_att.yaw;
+		_v_att_sp.thrust = _params.idle_thrust;
+		publish_att_sp = true;
 	} else {
 		/* in non-manual mode use 'vehicle_attitude_setpoint' topic */
 		vehicle_attitude_setpoint_poll();

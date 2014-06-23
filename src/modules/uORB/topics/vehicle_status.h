@@ -68,6 +68,7 @@ typedef enum {
 	MAIN_STATE_AUTO,
 	MAIN_STATE_ACRO,
 	MAIN_STATE_OFFBOARD,
+	MAIN_STATE_IDLE, //!< on ground
 	MAIN_STATE_MAX
 } main_state_t;
 

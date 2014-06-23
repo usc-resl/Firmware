@@ -244,3 +244,12 @@ PARAM_DEFINE_FLOAT(MC_ACRO_P_MAX, 90.0f);
  * @group Multicopter Attitude Control
  */
 PARAM_DEFINE_FLOAT(MC_ACRO_Y_MAX, 120.0f);
+
+/**
+ * Idle thrust
+ *
+ * @unit [0,1]
+ * @min 0.0
+ * @group Multicopter Attitude Control
+ */
+PARAM_DEFINE_FLOAT(MC_IDLE_THRUST, 0.0f);
