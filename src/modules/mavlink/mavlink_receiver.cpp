@@ -942,7 +942,6 @@ MavlinkReceiver::handle_message_offboard_control (mavlink_message_t *msg)
       offboard_control_sp.p2 = -(float)offboard_control_msg.p2;
       offboard_control_sp.p3 = -(float)offboard_control_msg.p3;
       offboard_control_sp.p4 = (float)offboard_control_msg.p4;
-      mavlink_log_info(_mavlink_fd, "offboard_sp %.2f %.2f %.2f", offboard_control_sp.p1, offboard_control_sp.p2, offboard_control_sp.p3);
 
 			if (offboard_control_msg.p4 > 0)
 				ml_armed = true;
