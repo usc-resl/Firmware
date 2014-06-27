@@ -44,7 +44,7 @@
 #include "../uORB.h"
 
 /**
- * Off-board control inputs.
+ * Off-board control inputs (in FRD or NED frame) [FRD = front-right-down]
  *
  * Typically sent by a ground control station / joystick or by
  * some off-board controller via C or SIMULINK.
