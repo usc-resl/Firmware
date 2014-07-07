@@ -775,7 +775,7 @@ protected:
 	{
 		if (act_sub->update(t)) {
 			mavlink_msg_servo_output_raw_send(_channel,
-							  act->timestamp / 1000,
+							  act->timestamp,
 							  _n,
 							  act->output[0],
 							  act->output[1],
@@ -785,6 +785,64 @@ protected:
 							  act->output[5],
 							  act->output[6],
 							  act->output[7]);
+		}
+	}
+};
+
+
+class MavlinkStreamActuatorControls : public MavlinkStream
+{
+public:
+	MavlinkStreamActuatorControls(unsigned int n) : MavlinkStream(), _n(n)
+	{
+		sprintf(_name, "ACTUATOR_CONTROLS_%d", _n);
+	}
+
+	const char *get_name()
+	{
+		return _name;
+	}
+
+	MavlinkStream *new_instance()
+	{
+		return new MavlinkStreamActuatorControls(_n);
+	}
+
+private:
+	MavlinkOrbSubscription *act_sub;
+	struct actuator_controls_s *act;
+
+	char _name[20];
+	unsigned int _n;
+
+protected:
+	void subscribe(Mavlink *mavlink)
+	{
+		orb_id_t act_topics[] = {
+			ORB_ID(actuator_controls_0),
+			ORB_ID(actuator_controls_1),
+			ORB_ID(actuator_controls_2),
+			ORB_ID(actuator_controls_3)
+		};
+
+		act_sub = mavlink->add_orb_subscription(act_topics[_n]);
+		act = (struct actuator_controls_s *)act_sub->get_data();
+	}
+
+	void send(const hrt_abstime t)
+	{
+		if (act_sub->update(t)) {
+			mavlink_msg_actuator_controls_send(_channel,
+							  act->timestamp,
+							  _n,
+							  act->control[0],
+							  act->control[1],
+							  act->control[2],
+							  act->control[3],
+							  act->control[4],
+							  act->control[5],
+							  act->control[6],
+							  act->control[7]);
 		}
 	}
 };
@@ -1396,5 +1454,9 @@ MavlinkStream *streams_list[] = {
 	new MavlinkStreamCameraCapture(),
 	new MavlinkStreamDistanceSensor(),
 	new MavlinkStreamViconPositionEstimate(),
+	new MavlinkStreamActuatorControls(0),
+	new MavlinkStreamActuatorControls(1),
+	new MavlinkStreamActuatorControls(2),
+	new MavlinkStreamActuatorControls(3),
 	nullptr
 };

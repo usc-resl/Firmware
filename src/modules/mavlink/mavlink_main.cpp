@@ -1983,6 +1983,8 @@ Mavlink::task_main(int argc, char *argv[])
 		configure_stream("GLOBAL_POSITION_SETPOINT_INT", 3.0f * rate_mult);
 		configure_stream("ROLL_PITCH_YAW_THRUST_SETPOINT", 3.0f * rate_mult);
 		configure_stream("DISTANCE_SENSOR", 0.5f);
+		configure_stream("ACTUATOR_CONTROLS_0", 10.0f * rate_mult);
+		configure_stream("SERVO_OUTPUT_RAW_0", 10.0f * rate_mult);
 		break;
 
 	case MAVLINK_MODE_CAMERA:
