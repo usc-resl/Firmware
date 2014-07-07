@@ -147,6 +147,7 @@ private:
 	orb_advert_t _telemetry_status_pub;
 	orb_advert_t _rc_pub;
 	orb_advert_t _manual_pub;
+	orb_advert_t _actuators_pub;
 
 	int _control_mode_sub;
 	int _hil_frames;
@@ -154,6 +155,7 @@ private:
 	bool _hil_local_proj_inited;
 	float _hil_local_alt0;
 	struct map_projection_reference_s _hil_local_proj_ref;
+	struct actuator_controls_s _actuators;
 
     // >>> DEBUG
     int _mavlink_fd;

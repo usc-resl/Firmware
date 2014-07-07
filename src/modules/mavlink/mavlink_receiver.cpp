@@ -108,6 +108,7 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 	_telemetry_status_pub(-1),
 	_rc_pub(-1),
 	_manual_pub(-1),
+	_actuators_pub(-1),
 	_control_mode_sub(-1),
 	_hil_frames(0),
 	_old_timestamp(0),
@@ -118,6 +119,7 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 	_control_mode_sub = orb_subscribe(ORB_ID(vehicle_control_mode));
 	memset(&hil_local_pos, 0, sizeof(hil_local_pos));
 	memset(&_control_mode, 0, sizeof(_control_mode));
+	memset(&_actuators, 0, sizeof(_actuators));
 
   _mavlink_fd = open (MAVLINK_LOG_DEVICE, 0);
 }
@@ -927,6 +929,19 @@ MavlinkReceiver::handle_message_offboard_control (mavlink_message_t *msg)
 
   switch (offboard_control_msg.mode) {
 		case 0:
+			ml_mode = OFFBOARD_CONTROL_MODE_DIRECT;
+			ml_armed = true;
+			// convert from FLU to FRD/NED
+			_actuators.control[0] = (float)offboard_control_msg.p1;
+			_actuators.control[1] = -(float)offboard_control_msg.p2;
+			_actuators.control[2] = -(float)offboard_control_msg.p3;
+			_actuators.control[3] = (float)offboard_control_msg.p4;
+			_actuators.timestamp = hrt_absolute_time();
+		  if (_actuators_pub < 0) {
+		    _actuators_pub = orb_advertise(ORB_ID(actuator_controls_0), &_actuators);
+		  } else {
+		    orb_publish(ORB_ID(actuator_controls_0), _actuators_pub, &_actuators);
+		  }
 			break;
 
 		case 1:
