@@ -1965,6 +1965,7 @@ Mavlink::task_main(int argc, char *argv[])
 
 	/* add default streams depending on mode and intervals depending on datarate */
 	float rate_mult = _datarate / 1000.0f;
+	// default rate_mult is 5.76 for baudrate 115200; 10.0 for baudrate 230400 and higher
 
 	configure_stream("HEARTBEAT", 1.0f);
 
@@ -1972,7 +1973,7 @@ Mavlink::task_main(int argc, char *argv[])
 	case MAVLINK_MODE_NORMAL:
 		configure_stream("SYS_STATUS", 1.0f);
 		configure_stream("GPS_GLOBAL_ORIGIN", 0.5f);
-		configure_stream("HIGHRES_IMU", 1.0f * rate_mult);
+		configure_stream("HIGHRES_IMU", 10.0f * rate_mult);
 		configure_stream("ATTITUDE", 10.0f * rate_mult);
 		configure_stream("VFR_HUD", 10.0f * rate_mult);
 		configure_stream("GPS_RAW_INT", 1.0f * rate_mult);
@@ -1983,8 +1984,9 @@ Mavlink::task_main(int argc, char *argv[])
 		configure_stream("GLOBAL_POSITION_SETPOINT_INT", 3.0f * rate_mult);
 		configure_stream("ROLL_PITCH_YAW_THRUST_SETPOINT", 3.0f * rate_mult);
 		configure_stream("DISTANCE_SENSOR", 0.5f);
-		configure_stream("ACTUATOR_CONTROLS_0", 10.0f * rate_mult);
-		configure_stream("SERVO_OUTPUT_RAW_0", 10.0f * rate_mult);
+		configure_stream("ACTUATOR_CONTROLS_0", 100.0f * rate_mult);
+		configure_stream("SERVO_OUTPUT_RAW_0", 100.0f * rate_mult);
+		configure_stream("RAW_IMU", 10.0f * rate_mult);
 		break;
 
 	case MAVLINK_MODE_CAMERA:

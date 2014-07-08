@@ -73,6 +73,9 @@
 #include <drivers/drv_rc_input.h>
 #include <drivers/drv_pwm_output.h>
 #include <drivers/drv_range_finder.h>
+#include <drivers/drv_accel.h>
+#include <drivers/drv_gyro.h>
+#include <drivers/drv_mag.h>
 
 #include "mavlink_messages.h"
 
@@ -287,6 +290,43 @@ protected:
 						status->errors_count2,
 						status->errors_count3,
 						status->errors_count4);
+	}
+};
+
+
+class MavlinkStreamRawImu : public MavlinkStream
+{
+public:
+	const char *get_name()
+	{
+		return "RAW_IMU";
+	}
+
+	MavlinkStream *new_instance()
+	{
+		return new MavlinkStreamRawImu();
+	}
+
+private:
+	MavlinkOrbSubscription *sub;
+	struct sensor_combined_s *msg;
+
+protected:
+	void subscribe(Mavlink *mavlink)
+	{
+		sub = mavlink->add_orb_subscription(ORB_ID(sensor_combined));
+		msg = (struct sensor_combined_s *)sub->get_data();
+	}
+
+	void send(const hrt_abstime t)
+	{
+		if (sub->update(t)) {
+			mavlink_msg_raw_imu_send(_channel,
+						     msg->timestamp,
+						     msg->accelerometer_raw[0], msg->accelerometer_raw[1], msg->accelerometer_raw[2],
+						     msg->gyro_raw[0], msg->gyro_raw[1], msg->gyro_raw[2],
+						     msg->magnetometer_raw[0], msg->magnetometer_raw[2], msg->magnetometer_raw[2]);
+		}
 	}
 };
 
@@ -1429,6 +1469,7 @@ protected:
 MavlinkStream *streams_list[] = {
 	new MavlinkStreamHeartbeat(),
 	new MavlinkStreamSysStatus(),
+	new MavlinkStreamRawImu(),
 	new MavlinkStreamHighresIMU(),
 	new MavlinkStreamAttitude(),
 	new MavlinkStreamAttitudeQuaternion(),
