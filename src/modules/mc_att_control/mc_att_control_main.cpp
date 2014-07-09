@@ -944,8 +944,13 @@ MulticopterAttitudeControl::task_main()
 						_v_rates_sp_pub = orb_advertise(ORB_ID(vehicle_rates_setpoint), &_v_rates_sp);
 					}
 
+				} else if (_v_control_mode.flag_control_offboard_enabled) {
+					_rates_sp(0) = _offboard_control_sp.p1;
+					_rates_sp(1) = _offboard_control_sp.p2;
+					_rates_sp(2) = _offboard_control_sp.p3;
+					_thrust_sp = _offboard_control_sp.p4;
+
 				} else {
-					/* attitude controller disabled, poll rates setpoint topic */
 					vehicle_rates_setpoint_poll();
 					_rates_sp(0) = _v_rates_sp.roll;
 					_rates_sp(1) = _v_rates_sp.pitch;
