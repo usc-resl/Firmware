@@ -345,24 +345,15 @@ MavlinkReceiver::handle_message_vicon_position_estimate(mavlink_message_t *msg)
 	struct vehicle_vicon_position_s vicon_position;
 	memset(&vicon_position, 0, sizeof(vicon_position));
 
-  /* uint64_t dt = ((float) hrt_elapsed_time ( &last_vicon_update_));
-   * last_vicon_update_ = hrt_absolute_time();
-   * 
-   * mavlink_log_info (_mavlink_fd, "> ERROR: %llu ", dt); */
-
-
 	vicon_position.timestamp = hrt_absolute_time();
 	vicon_position.x = pos.x;
-	vicon_position.y = -pos.y; // -> conversion from Vicon to NED frame: swap sign
-	vicon_position.z = -pos.z; // -> conversion from Vicon to NED frame: swap sign
+	vicon_position.y = pos.y;
+	vicon_position.z = pos.z;
 	vicon_position.roll = pos.roll;
-	vicon_position.pitch = -pos.pitch; // -> conversion from Vicon to NED frame: swap sign
-	vicon_position.yaw = -pos.yaw; // -> conversion from Vicon to NED frame: swap sign
+	vicon_position.pitch = pos.pitch;
+	vicon_position.yaw = pos.yaw;
 
   vicon_position.valid = true;
-
-
-
 
   /* mavlink_log_info (_mavlink_fd, "%.3f %.3f %.3f %.3f %.3f %.3f",
    *                   vicon_position.x, vicon_position.y, vicon_position.z, 
@@ -931,10 +922,9 @@ MavlinkReceiver::handle_message_offboard_control (mavlink_message_t *msg)
 		case 0:
 			ml_mode = OFFBOARD_CONTROL_MODE_DIRECT;
 			ml_armed = true;
-			// convert from FLU to FRD/NED
 			_actuators.control[0] = (float)offboard_control_msg.p1;
-			_actuators.control[1] = -(float)offboard_control_msg.p2;
-			_actuators.control[2] = -(float)offboard_control_msg.p3;
+			_actuators.control[1] = (float)offboard_control_msg.p2;
+			_actuators.control[2] = (float)offboard_control_msg.p3;
 			_actuators.control[3] = (float)offboard_control_msg.p4;
 			_actuators.timestamp = hrt_absolute_time();
 		  if (_actuators_pub < 0) {
@@ -946,16 +936,19 @@ MavlinkReceiver::handle_message_offboard_control (mavlink_message_t *msg)
 
 		case 1:
 			ml_mode = OFFBOARD_CONTROL_MODE_DIRECT_RATES;
+      offboard_control_sp.p1 = (float)offboard_control_msg.p1;
+      offboard_control_sp.p2 = (float)offboard_control_msg.p2;
+      offboard_control_sp.p3 = (float)offboard_control_msg.p3;
+      offboard_control_sp.p4 = (float)offboard_control_msg.p4;
 			if (offboard_control_msg.p4 > 0)
 				ml_armed = true;
 			break;
 
 		case 2:
 			ml_mode = OFFBOARD_CONTROL_MODE_DIRECT_ATTITUDE;
-			// convert from FLU to FRD/NED
       offboard_control_sp.p1 = (float)offboard_control_msg.p1;
-      offboard_control_sp.p2 = -(float)offboard_control_msg.p2;
-      offboard_control_sp.p3 = -(float)offboard_control_msg.p3;
+      offboard_control_sp.p2 = (float)offboard_control_msg.p2;
+      offboard_control_sp.p3 = (float)offboard_control_msg.p3;
       offboard_control_sp.p4 = (float)offboard_control_msg.p4;
 
 			if (offboard_control_msg.p4 > 0)
@@ -964,16 +957,15 @@ MavlinkReceiver::handle_message_offboard_control (mavlink_message_t *msg)
 
 		case 3:
 			ml_mode = OFFBOARD_CONTROL_MODE_DIRECT_VELOCITY;
-			ml_armed = true;
+			ml_armed = false;
 			break;
 
 		case 4:
 			ml_mode = OFFBOARD_CONTROL_MODE_DIRECT_POSITION;
-			// convert from VICON to NED
       offboard_control_sp.p1 = (float)offboard_control_msg.p1;
-      offboard_control_sp.p2 = (-1) * (float)offboard_control_msg.p2;
-      offboard_control_sp.p3 = (-1) * (float)offboard_control_msg.p3;
-      offboard_control_sp.p4 = (-1) * (float)offboard_control_msg.p4;
+      offboard_control_sp.p2 = (float)offboard_control_msg.p2;
+      offboard_control_sp.p3 = (float)offboard_control_msg.p3;
+      offboard_control_sp.p4 = (float)offboard_control_msg.p4;
 
 			ml_armed = true;
 			break;
