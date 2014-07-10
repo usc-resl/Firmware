@@ -809,7 +809,7 @@ MulticopterPositionControl::task_main()
 					}
 				}
 
-				mavlink_log_info(_mavlink_fd, "[mpc] normalized vel sp: %.2f, %.2f, %.2f", (double)_vel_sp(0), (double)_vel_sp(1), (double)_vel_sp(2));
+				//mavlink_log_info(_mavlink_fd, "[mpc] normalized vel sp: %.2f, %.2f, %.2f", (double)_vel_sp(0), (double)_vel_sp(1), (double)_vel_sp(2));
 				
 				_global_vel_sp.vx = _vel_sp(0);
 				_global_vel_sp.vy = _vel_sp(1);
